@@ -213,7 +213,7 @@ class CollegeFlow:
         current_step = st.session_state.get('current_step_college', 1)
         self.current_step = current_step
     
-        # Display step header with better styling
+        # Display step header
         step_names = {
             1: "👨‍🎓 Student Database",
             2: "📊 Analytics Dashboard",
@@ -225,15 +225,14 @@ class CollegeFlow:
             8: "📈 Performance Reports"
         }
     
-        # Create a nice header with step information
+        # Create header with progress
         col1, col2 = st.columns([3, 1])
         with col1:
             st.subheader(f"Step {current_step}: {step_names[current_step]}")
         with col2:
-            total_steps = 8
-            progress = current_step / total_steps
+            progress = current_step / 8
             st.progress(progress)
-            st.caption(f"Step {current_step} of {total_steps}")
+            st.caption(f"Step {current_step} of 8")
     
         # Display appropriate step
         if current_step == 1:
@@ -253,8 +252,7 @@ class CollegeFlow:
         elif current_step == 8:
             self.step8_performance_reports()
     
-        # Navigation buttons at bottom
-        st.divider()
+        # Navigation
         self.display_workflow_navigation(current_step)
     
     def step1_student_database(self):
