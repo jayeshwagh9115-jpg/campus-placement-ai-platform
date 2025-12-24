@@ -237,53 +237,132 @@ class AIResumeBuilder:
                 st.info("Would copy HTML to clipboard")
     
     def create_html_resume(self, resume_data):
-        """Create HTML representation of resume"""
+        """Create HTML representation of resume with better styling"""
+        # Extract data
+        personal_info = resume_data['personal_info']
+        education = resume_data['education']
+        experiences = resume_data.get('experience', [])
+        skills = resume_data.get('skills', {})
+        projects = resume_data.get('projects', [])
+        
+        # Start building HTML
         html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #2c3e50; margin-bottom: 5px;">{resume_data['personal_info']['name']}</h1>
-                <div style="color: #7f8c8d;">
-                    {resume_data['personal_info']['email']} | {resume_data['personal_info']['phone']}
-                    {f"| LinkedIn: {resume_data['personal_info']['linkedin']}" if resume_data['personal_info']['linkedin'] else ""}
+        <div style="font-family: 'Arial', sans-serif; max-width: 800px; margin: 0 auto; padding: 30px; background: white; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <div style="text-align: center; margin-bottom: 40px; border-bottom: 3px solid #3498db; padding-bottom: 20px;">
+                <h1 style="color: #2c3e50; margin-bottom: 10px; font-size: 32px;">{personal_info['name']}</h1>
+                <div style="color: #7f8c8d; font-size: 16px; line-height: 1.6;">
+                    {personal_info['email']} • {personal_info['phone']}
+                    {f"<br>LinkedIn: {personal_info['linkedin']}" if personal_info['linkedin'] else ""}
+                    {f" • GitHub: {personal_info['github']}" if personal_info['github'] else ""}
+                    {f" • Portfolio: {personal_info['portfolio']}" if personal_info['portfolio'] else ""}
                 </div>
             </div>
-            
-            <div style="margin-bottom: 20px;">
-                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Education</h2>
-                <p><strong>{resume_data['education']['degree']} in {resume_data['education']['major']}</strong></p>
-                <p>{resume_data['education']['university']} | CGPA: {resume_data['education']['cgpa']} | Graduation: {resume_data['education']['year']}</p>
+        
+            <!-- Education -->
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Education</h2>
+                <p style="margin-bottom: 5px;"><strong>{education['degree']} in {education['major']}</strong></p>
+                <p style="color: #555; margin-bottom: 5px;">{education['university']} • {education['location']}</p>
+                <p style="color: #777;">CGPA: {education['cgpa']} • Graduation: {education['year']}</p>
             </div>
         """
-        
-        # Add sections based on available data
-        if resume_data.get('experience'):
+    
+        # Add Experience Section if exists
+        if experiences:
             html += """
-            <div style="margin-bottom: 20px;">
-                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Experience</h2>
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Experience</h2>
             """
-            for exp in resume_data['experience']:
+        
+            for exp in experiences:
                 html += f"""
-                <div style="margin-bottom: 15px;">
-                    <p><strong>{exp['position']}</strong> at {exp['company']}</p>
-                    <p><em>{exp['duration']} | {exp['location']}</em></p>
-                    <p style="white-space: pre-line;">{exp['description']}</p>
+                <div style="margin-bottom: 20px;">
+                    <p style="margin-bottom: 5px;"><strong>{exp['position']}</strong> at {exp['company']}</p>
+                    <p style="color: #555; margin-bottom: 10px; font-style: italic;">{exp['duration']} • {exp['location']}</p>
+                    <div style="margin-left: 20px;">
+                """
+            
+                # Process description (handle bullet points)
+                if exp['description']:
+                    lines = exp['description'].split('\n')
+                    for line in lines:
+                        if line.strip():
+                            # Remove bullet if already present
+                            clean_line = line.strip()
+                            if clean_line.startswith('•'):
+                                clean_line = clean_line[1:].strip()
+                            html += f'<p style="margin-bottom: 5px; color: #444;">• {clean_line}</p>'
+            
+                html += """
+                    </div>
                 </div>
                 """
-            html += "</div>"
         
-        if resume_data.get('skills'):
+            html += "</div>"
+    
+        # Add Skills Section
+        if skills and any(skills.values()):
             html += """
-            <div style="margin-bottom: 20px;">
-                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">Skills</h2>
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Skills</h2>
             """
-            for category, skills in resume_data['skills'].items():
-                if skills:
-                    html += f"""
-                    <p><strong>{category}:</strong> {', '.join(skills)}</p>
-                    """
-            html += "</div>"
         
-        html += "</div>"
+            for category, skill_list in skills.items():
+                if skill_list:
+                    html += f"""
+                    <div style="margin-bottom: 10px;">
+                        <p style="margin-bottom: 5px;"><strong>{category}:</strong></p>
+                        <p style="color: #555; margin-left: 20px;">{', '.join(skill_list)}</p>
+                    </div>
+                    """
+        
+            html += "</div>"
+    
+        # Add Projects Section if exists
+        if projects:
+            html += """
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Projects</h2>
+            """
+        
+            for proj in projects:
+                html += f"""
+                <div style="margin-bottom: 20px;">
+                    <p style="margin-bottom: 5px;"><strong>{proj['title']}</strong></p>
+                    <p style="color: #555; margin-bottom: 5px; font-size: 14px;">
+                        <em>Technologies: {proj['technologies']} • Duration: {proj['duration']}</em>
+                    </p>
+                """
+            
+                if proj['link']:
+                    html += f'<p style="margin-bottom: 10px; color: #3498db;">🔗 <a href="{proj["link"]}" style="color: #3498db; text-decoration: none;">View Project</a></p>'
+            
+                # Process project description
+                if proj['description']:
+                    lines = proj['description'].split('\n')
+                    html += '<div style="margin-left: 20px;">'
+                    for line in lines:
+                        if line.strip():
+                            clean_line = line.strip()
+                            if clean_line.startswith('•'):
+                                clean_line = clean_line[1:].strip()
+                            html += f'<p style="margin-bottom: 5px; color: #444;">• {clean_line}</p>'
+                    html += '</div>'
+            
+                html += "</div>"
+        
+            html += "</div>"
+    
+        # Add footer
+        html += f"""
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #95a5a6; font-size: 12px;">
+                <p>Generated by AI Campus Placement Platform • {resume_data['generated_date']}</p>
+                <p>Template: {resume_data['template']}</p>
+            </div>
+        </div>
+        """
+    
         return html
     
     def optimize_resume(self):
