@@ -161,7 +161,3 @@ st.markdown("""
     <p>Built with ❤️ using Streamlit & Python | Database Integrated | Systematic Workflow</p>
 </div>
 """, unsafe_allow_html=True)
-    <p>🎓 <b>AI Campus Placement Platform</b> | National Level Hackathon Project</p>
-    <p>Built with ❤️ using Streamlit & Python | Database Integrated | Systematic Workflow</p>
-</div>
-""", unsafe_allow_html=True)
