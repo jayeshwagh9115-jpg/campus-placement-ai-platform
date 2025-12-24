@@ -20,7 +20,7 @@ class AIResumeBuilder:
         # Check if user is in demo mode
         if 'demo_mode' in st.session_state and st.session_state.demo_mode:
             st.info("🎮 Demo Mode Active - Using sample student data")
-            self.demo_mode()
+            self.demo_mode_display()  # Changed from self.demo_mode()
             return
         
         # Main interface
@@ -34,6 +34,64 @@ class AIResumeBuilder:
         
         with tab3:
             self.ats_checker()
+    
+    def demo_mode_display(self):  # Renamed method
+        """Demo mode with sample data"""
+        st.info("🎮 **Demo Mode:** Using sample student data for demonstration")
+        
+        # Sample student data
+        sample_data = {
+            'personal_info': {
+                'name': 'Rahul Sharma',
+                'email': 'rahul.sharma@example.com',
+                'phone': '+91 9876543210',
+                'linkedin': 'linkedin.com/in/rahulsharma',
+                'github': 'github.com/rahulsharma',
+                'portfolio': 'rahulsharma.dev'
+            },
+            'education': {
+                'degree': 'Bachelor of Technology',
+                'university': 'Indian Institute of Technology',
+                'major': 'Computer Science and Engineering',
+                'cgpa': 8.7,
+                'year': 2024,
+                'location': 'Mumbai, India'
+            },
+            'experience': [
+                {
+                    'company': 'Tech Innovations Pvt Ltd',
+                    'position': 'Software Developer Intern',
+                    'duration': 'June 2023 - Present',
+                    'location': 'Bangalore, India',
+                    'description': '• Developed and maintained web applications using React and Node.js\n• Collaborated with cross-functional teams to implement new features\n• Reduced page load time by 30% through performance optimization'
+                }
+            ],
+            'skills': {
+                'Technical Skills': ['Python', 'JavaScript', 'React', 'Node.js', 'AWS', 'Docker'],
+                'Soft Skills': ['Communication', 'Problem Solving', 'Teamwork'],
+                'Tools': ['Git', 'VS Code', 'JIRA', 'Postman']
+            },
+            'projects': [
+                {
+                    'title': 'Campus Placement Portal',
+                    'technologies': 'Python, Streamlit, Machine Learning',
+                    'duration': 'Jan 2024 - Present',
+                    'link': 'github.com/rahulsharma/placement-portal',
+                    'description': '• Developed an AI-powered campus placement management system\n• Implemented resume optimization and placement prediction features\n• Used by 500+ students for career guidance'
+                }
+            ],
+            'template': 'Professional',
+            'ai_enhancements': ['Optimize Keywords for ATS', 'Add Metrics and Quantifiable Results'],
+            'generated_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Show sample data
+        with st.expander("📋 View Sample Data", expanded=False):
+            st.json(sample_data, expanded=False)
+        
+        # Direct generate button for demo
+        if st.button("🚀 Generate Sample Resume", type="primary"):
+            self.generate_resume(sample_data)
     
     def build_resume(self):
         """Build resume from scratch"""
@@ -164,6 +222,11 @@ class AIResumeBuilder:
             
             # Submit button
             if st.form_submit_button("🚀 Generate AI-Optimized Resume"):
+                # Validate required fields
+                if not full_name or not email:
+                    st.error("Please fill in all required fields (marked with *)")
+                    return
+                
                 # Collect all data
                 resume_data = {
                     'personal_info': {
@@ -192,63 +255,6 @@ class AIResumeBuilder:
                 
                 # Generate resume
                 self.generate_resume(resume_data)
-
-    def generate_cover_letter(self, resume_data, company_name, job_title):
-        """Generate AI-powered cover letter"""
-        cover_letter_template = f"""
-        {resume_data['personal_info']['name']}
-        {resume_data['personal_info']['email']} | {resume_data['personal_info']['phone']}
-    
-        Hiring Manager
-        {company_name}
-    
-        Dear Hiring Manager,
-    
-        I am writing to express my interest in the {job_title} position at {company_name}. 
-        
-        With my background in {resume_data['education']['major']} from {resume_data['education']['university']}, 
-        where I maintained a CGPA of {resume_data['education']['cgpa']}, I have developed strong skills in:
-    
-        {', '.join(resume_data['skills'].get('Technical Skills', []))}
-    
-        In my previous experience, I:
-        {resume_data['experience'][0]['description'] if resume_data.get('experience') else 'Gained practical experience through academic projects'}
-    
-        I am particularly excited about the opportunity at {company_name} because...
-    
-        Thank you for considering my application. I look forward to discussing how my skills 
-        and experiences align with the needs of your team.
-    
-        Sincerely,
-        {resume_data['personal_info']['name']}
-        """
-    
-        return cover_letter_template
-
-def analyze_resume_gaps(self, resume_data, target_role):
-    """Analyze resume for gaps compared to target role"""
-    gaps = []
-    
-    # Common requirements for tech roles
-    role_requirements = {
-        "Software Development Engineer": ["Data Structures", "Algorithms", "System Design", "OOP"],
-        "Data Scientist": ["Statistics", "Machine Learning", "Python", "SQL", "Data Visualization"],
-        "Product Manager": ["Product Strategy", "User Research", "Data Analysis", "Communication"]
-    }
-    
-    target_skills = role_requirements.get(target_role, [])
-    resume_skills = []
-    
-    # Extract all skills from resume
-    for category, skill_list in resume_data.get('skills', {}).items():
-        resume_skills.extend([s.lower() for s in skill_list])
-    
-    # Find missing skills
-    for required_skill in target_skills:
-        if required_skill.lower() not in resume_skills:
-            gaps.append(f"Missing: {required_skill}")
-    
-    return gaps
     
     def generate_resume(self, resume_data):
         """Generate and display resume"""
@@ -281,48 +287,55 @@ def analyze_resume_gaps(self, resume_data, target_role):
         
         # Download options
         st.subheader("📥 Download Options")
-
-        # Create columns for download buttons
+        
         col1, col2, col3 = st.columns(3)
-
         with col1:
             # HTML Download
             html_href, html_filename = self.download_resume(resume_data, "html")
-            st.markdown(f"""
-            <a href="{html_href}" download="{html_filename}">
-                <button style="width:100%; padding:10px; background:#3498db; color:white; border:none; border-radius:5px; cursor:pointer;">
-                    📝 Download as HTML
-                </button>
-            </a>
-            """, unsafe_allow_html=True)
-
+            if html_href:
+                st.markdown(f"""
+                <a href="{html_href}" download="{html_filename}" style="text-decoration: none;">
+                    <button style="width:100%; padding:10px; background:#3498db; color:white; border:none; border-radius:5px; cursor:pointer;">
+                        📝 Download as HTML
+                    </button>
+                </a>
+                """, unsafe_allow_html=True)
+            else:
+                st.button("📝 Download as HTML", disabled=True, help="HTML generation not available")
+        
         with col2:
             # Text Download
             txt_href, txt_filename = self.download_resume(resume_data, "text")
-            st.markdown(f"""
-            <a href="{txt_href}" download="{txt_filename}">
-                <button style="width:100%; padding:10px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer;">
-                    📄 Download as Text
-                </button>
-            </a>
-            """, unsafe_allow_html=True)
-
+            if txt_href:
+                st.markdown(f"""
+                <a href="{txt_href}" download="{txt_filename}" style="text-decoration: none;">
+                    <button style="width:100%; padding:10px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer;">
+                        📄 Download as Text
+                    </button>
+                </a>
+                """, unsafe_allow_html=True)
+            else:
+                st.button("📄 Download as Text", disabled=True, help="Text generation not available")
+        
         with col3:
             # Copy to Clipboard
             if st.button("📋 Copy HTML to Clipboard", use_container_width=True):
                 # For Streamlit Cloud, we need a workaround
-                import pyperclip
                 try:
-                    pyperclip.copy(html_content)
+                    # Try to use pyperclip if available
+                    import pyperclip
+                    pyperclip.copy(html_resume)
                     st.success("HTML copied to clipboard!")
-                except:
+                except ImportError:
                     st.info("""
                     **To copy:**
                     1. Right-click on the preview
                     2. Select "Inspect" or "View Source"
                     3. Copy the HTML code
                     """)
-
+                except Exception as e:
+                    st.warning(f"Could not copy to clipboard: {str(e)}")
+        
         # Add PDF generation note
         st.info("""
         **💡 PDF Generation:** For PDF export, download the HTML version and use:
@@ -348,12 +361,12 @@ def analyze_resume_gaps(self, resume_data, target_role):
                 <h1 style="color: #2c3e50; margin-bottom: 10px; font-size: 32px;">{personal_info['name']}</h1>
                 <div style="color: #7f8c8d; font-size: 16px; line-height: 1.6;">
                     {personal_info['email']} • {personal_info['phone']}
-                    {f"<br>LinkedIn: {personal_info['linkedin']}" if personal_info['linkedin'] else ""}
-                    {f" • GitHub: {personal_info['github']}" if personal_info['github'] else ""}
-                    {f" • Portfolio: {personal_info['portfolio']}" if personal_info['portfolio'] else ""}
+                    {f"<br>LinkedIn: {personal_info['linkedin']}" if personal_info.get('linkedin') else ""}
+                    {f" • GitHub: {personal_info['github']}" if personal_info.get('github') else ""}
+                    {f" • Portfolio: {personal_info['portfolio']}" if personal_info.get('portfolio') else ""}
                 </div>
             </div>
-        
+            
             <!-- Education -->
             <div style="margin-bottom: 30px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Education</h2>
@@ -362,14 +375,14 @@ def analyze_resume_gaps(self, resume_data, target_role):
                 <p style="color: #777;">CGPA: {education['cgpa']} • Graduation: {education['year']}</p>
             </div>
         """
-    
+        
         # Add Experience Section if exists
         if experiences:
             html += """
             <div style="margin-bottom: 30px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Experience</h2>
             """
-        
+            
             for exp in experiences:
                 html += f"""
                 <div style="margin-bottom: 20px;">
@@ -377,9 +390,9 @@ def analyze_resume_gaps(self, resume_data, target_role):
                     <p style="color: #555; margin-bottom: 10px; font-style: italic;">{exp['duration']} • {exp['location']}</p>
                     <div style="margin-left: 20px;">
                 """
-            
+                
                 # Process description (handle bullet points)
-                if exp['description']:
+                if exp.get('description'):
                     lines = exp['description'].split('\n')
                     for line in lines:
                         if line.strip():
@@ -388,21 +401,21 @@ def analyze_resume_gaps(self, resume_data, target_role):
                             if clean_line.startswith('•'):
                                 clean_line = clean_line[1:].strip()
                             html += f'<p style="margin-bottom: 5px; color: #444;">• {clean_line}</p>'
-            
+                
                 html += """
                     </div>
                 </div>
                 """
-        
+            
             html += "</div>"
-    
+        
         # Add Skills Section
         if skills and any(skills.values()):
             html += """
             <div style="margin-bottom: 30px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Skills</h2>
             """
-        
+            
             for category, skill_list in skills.items():
                 if skill_list:
                     html += f"""
@@ -411,16 +424,16 @@ def analyze_resume_gaps(self, resume_data, target_role):
                         <p style="color: #555; margin-left: 20px;">{', '.join(skill_list)}</p>
                     </div>
                     """
-        
+            
             html += "</div>"
-    
+        
         # Add Projects Section if exists
         if projects:
             html += """
             <div style="margin-bottom: 30px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 8px; margin-bottom: 15px; font-size: 22px;">Projects</h2>
             """
-        
+            
             for proj in projects:
                 html += f"""
                 <div style="margin-bottom: 20px;">
@@ -429,12 +442,12 @@ def analyze_resume_gaps(self, resume_data, target_role):
                         <em>Technologies: {proj['technologies']} • Duration: {proj['duration']}</em>
                     </p>
                 """
-            
-                if proj['link']:
+                
+                if proj.get('link'):
                     html += f'<p style="margin-bottom: 10px; color: #3498db;">🔗 <a href="{proj["link"]}" style="color: #3498db; text-decoration: none;">View Project</a></p>'
-            
+                
                 # Process project description
-                if proj['description']:
+                if proj.get('description'):
                     lines = proj['description'].split('\n')
                     html += '<div style="margin-left: 20px;">'
                     for line in lines:
@@ -444,11 +457,11 @@ def analyze_resume_gaps(self, resume_data, target_role):
                                 clean_line = clean_line[1:].strip()
                             html += f'<p style="margin-bottom: 5px; color: #444;">• {clean_line}</p>'
                     html += '</div>'
-            
+                
                 html += "</div>"
-        
+            
             html += "</div>"
-    
+        
         # Add footer
         html += f"""
             <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #95a5a6; font-size: 12px;">
@@ -457,8 +470,85 @@ def analyze_resume_gaps(self, resume_data, target_role):
             </div>
         </div>
         """
-    
+        
         return html
+    
+    def download_resume(self, resume_data, format_type):
+        """Generate and download resume in different formats"""
+        if format_type == "html":
+            html_content = self.create_html_resume(resume_data)
+            
+            # Create full HTML document
+            html_file = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Resume - {resume_data['personal_info']['name']}</title>
+                <style>
+                    @media print {{
+                        body {{ margin: 0; padding: 0; }}
+                        .resume-container {{ box-shadow: none !important; }}
+                    }}
+                </style>
+            </head>
+            <body>
+                {html_content}
+            </body>
+            </html>
+            """
+            
+            # Create download link
+            b64 = base64.b64encode(html_file.encode()).decode()
+            href = f'data:text/html;base64,{b64}'
+            filename = f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.html"
+            
+            return href, filename
+        
+        elif format_type == "text":
+            # Create plain text version
+            text_content = f"""
+            RESUME - {resume_data['personal_info']['name']}
+            {'='*50}
+            
+            CONTACT INFORMATION
+            Email: {resume_data['personal_info']['email']}
+            Phone: {resume_data['personal_info']['phone']}
+            LinkedIn: {resume_data['personal_info'].get('linkedin', 'N/A')}
+            
+            EDUCATION
+            {resume_data['education']['degree']} in {resume_data['education']['major']}
+            {resume_data['education']['university']}
+            CGPA: {resume_data['education']['cgpa']} | Graduation: {resume_data['education']['year']}
+            
+            """
+            
+            # Add experience
+            if resume_data.get('experience'):
+                text_content += "\nEXPERIENCE\n"
+                for exp in resume_data['experience']:
+                    text_content += f"\n{exp['position']} at {exp['company']}\n"
+                    text_content += f"{exp['duration']} | {exp['location']}\n"
+                    if exp.get('description'):
+                        text_content += f"{exp['description']}\n"
+            
+            # Add skills
+            if resume_data.get('skills'):
+                text_content += "\nSKILLS\n"
+                for category, skill_list in resume_data['skills'].items():
+                    if skill_list:
+                        text_content += f"\n{category}: {', '.join(skill_list)}"
+            
+            text_content += f"\n\nGenerated: {resume_data['generated_date']}"
+            
+            b64 = base64.b64encode(text_content.encode()).decode()
+            href = f'data:text/plain;base64,{b64}'
+            filename = f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.txt"
+            
+            return href, filename
+        
+        return None, None
     
     def optimize_resume(self):
         """Optimize existing resume"""
@@ -599,137 +689,3 @@ Experience: Developed web applications at Tech Company"""
                 
                 for issue in issues:
                     st.error(issue)
-
-    def download_resume(self, resume_data, format_type):
-        """Generate and download resume in different formats"""
-        html_content = self.create_html_resume(resume_data)
-    
-        if format_type == "html":
-            # Create HTML file
-            html_file = f"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Resume - {resume_data['personal_info']['name']}</title>
-                <style>
-                    @media print {{
-                        body {{ margin: 0; padding: 0; }}
-                        .resume-container {{ box-shadow: none !important; }}
-                    }}
-                </style>
-            </head>
-            <body>
-                {html_content}
-            </body>
-            </html>
-            """
-        
-            # Create download link
-            import base64
-            b64 = base64.b64encode(html_file.encode()).decode()
-            href = f'data:text/html;base64,{b64}'
-        
-            return href, f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.html"
-    
-        elif format_type == "text":
-            # Create plain text version
-            text_content = f"""
-            RESUME - {resume_data['personal_info']['name']}
-            {'='*50}
-        
-            CONTACT INFORMATION
-            Email: {resume_data['personal_info']['email']}
-            Phone: {resume_data['personal_info']['phone']}
-            LinkedIn: {resume_data['personal_info']['linkedin'] or 'N/A'}
-        
-            EDUCATION
-            {resume_data['education']['degree']} in {resume_data['education']['major']}
-            {resume_data['education']['university']}
-            CGPA: {resume_data['education']['cgpa']} | Graduation: {resume_data['education']['year']}
-        
-            """
-        
-            # Add experience
-            if resume_data.get('experience'):
-                text_content += "\nEXPERIENCE\n"
-                for exp in resume_data['experience']:
-                    text_content += f"\n{exp['position']} at {exp['company']}\n"
-                    text_content += f"{exp['duration']} | {exp['location']}\n"
-                    if exp['description']:
-                        text_content += f"{exp['description']}\n"
-        
-            # Add skills
-            if resume_data.get('skills'):
-                text_content += "\nSKILLS\n"
-                for category, skill_list in resume_data['skills'].items():
-                    if skill_list:
-                        text_content += f"\n{category}: {', '.join(skill_list)}"
-        
-            text_content += f"\n\nGenerated: {resume_data['generated_date']}"
-        
-            b64 = base64.b64encode(text_content.encode()).decode()
-            href = f'data:text/plain;base64,{b64}'
-        
-            return href, f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.txt"
-    
-        return None, None
-    
-    def demo_mode(self):
-        """Demo mode with sample data"""
-        st.info("🎮 **Demo Mode:** Using sample student data for demonstration")
-        
-        # Sample student data
-        sample_data = {
-            'personal_info': {
-                'name': 'Rahul Sharma',
-                'email': 'rahul.sharma@example.com',
-                'phone': '+91 9876543210',
-                'linkedin': 'linkedin.com/in/rahulsharma',
-                'github': 'github.com/rahulsharma',
-                'portfolio': 'rahulsharma.dev'
-            },
-            'education': {
-                'degree': 'Bachelor of Technology',
-                'university': 'Indian Institute of Technology',
-                'major': 'Computer Science and Engineering',
-                'cgpa': 8.7,
-                'year': 2024,
-                'location': 'Mumbai, India'
-            },
-            'experience': [
-                {
-                    'company': 'Tech Innovations Pvt Ltd',
-                    'position': 'Software Developer Intern',
-                    'duration': 'June 2023 - Present',
-                    'location': 'Bangalore, India',
-                    'description': '• Developed and maintained web applications using React and Node.js\n• Collaborated with cross-functional teams to implement new features\n• Reduced page load time by 30% through performance optimization'
-                }
-            ],
-            'skills': {
-                'Technical Skills': ['Python', 'JavaScript', 'React', 'Node.js', 'AWS', 'Docker'],
-                'Soft Skills': ['Communication', 'Problem Solving', 'Teamwork'],
-                'Tools': ['Git', 'VS Code', 'JIRA', 'Postman']
-            },
-            'projects': [
-                {
-                    'title': 'Campus Placement Portal',
-                    'technologies': 'Python, Streamlit, Machine Learning',
-                    'duration': 'Jan 2024 - Present',
-                    'link': 'github.com/rahulsharma/placement-portal',
-                    'description': '• Developed an AI-powered campus placement management system\n• Implemented resume optimization and placement prediction features\n• Used by 500+ students for career guidance'
-                }
-            ],
-            'template': 'Professional',
-            'ai_enhancements': ['Optimize Keywords for ATS', 'Add Metrics and Quantifiable Results'],
-            'generated_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        # Show sample data
-        with st.expander("📋 View Sample Data", expanded=False):
-            st.json(sample_data, expanded=False)
-        
-        # Direct generate button for demo
-        if st.button("🚀 Generate Sample Resume", type="primary"):
-            self.generate_resume(sample_data)
