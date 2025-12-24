@@ -129,25 +129,26 @@ class StudentInfoModule:
                 if not student_id:
                     student_id = f"S{len(self.students_df) + 1:03d}"
                 
-                # Add to dataframe
-                new_student = {
-                    'student_id': student_id,
-                    'name': name,
-                    'email': email,
-                    'phone': phone,
-                    'department': department,
-                    'semester': semester,
-                    'cgpa': cgpa,
-                    'backlogs': backlogs,
-                    'skills': ', '.join(skills),
-                    'placement_status': 'Not Placed',
-                    'placement_company': None,
-                    'resume_link': None
-                }
+                # Add to dataframe (for demo purposes - in real app, save to database)
+                new_student = pd.DataFrame({
+                    'student_id': [student_id],
+                    'name': [name],
+                    'email': [email],
+                    'phone': [phone],
+                    'department': [department],
+                    'semester': [semester],
+                    'cgpa': [cgpa],
+                    'backlogs': [backlogs],
+                    'skills': [', '.join(skills)],
+                    'placement_status': ['Not Placed'],
+                    'placement_company': [None],
+                    'resume_link': [None]
+                })
                 
-                # In production, this would save to database
-                self.students_df = self.students_df.append(new_student, ignore_index=True)
+                # Use pd.concat instead of append (append is deprecated)
+                self.students_df = pd.concat([self.students_df, new_student], ignore_index=True)
                 st.success(f"Student {name} added successfully!")
+                st.rerun()
     
     def display_analytics(self):
         """Display student analytics"""
@@ -168,11 +169,68 @@ class StudentInfoModule:
         dept_counts = self.students_df['department'].value_counts()
         st.bar_chart(dept_counts)
         
-        # Placement statistics
+        # Placement statistics - FIXED VERSION
         st.subheader("Placement Statistics")
-        placement_counts = self.students_df['placement_status'].value_counts()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(placement_counts)
-        with col2:
-            st.dataframe(self.students_df[['department', 'cgpa', 'placement_status']].groupby('department').mean())
+        
+        # Create a summary table
+        placement_summary = pd.DataFrame({
+            'Department': self.students_df['department'].unique()
+        })
+        
+        # Calculate metrics for each department
+        summary_data = []
+        for dept in self.students_df['department'].unique():
+            dept_students = self.students_df[self.students_df['department'] == dept]
+            avg_cgpa = dept_students['cgpa'].mean()
+            placed_count = len(dept_students[dept_students['placement_status'] == 'Placed'])
+            total_count = len(dept_students)
+            placement_rate = (placed_count / total_count * 100) if total_count > 0 else 0
+            
+            summary_data.append({
+                'Department': dept,
+                'Students': total_count,
+                'Avg CGPA': f"{avg_cgpa:.2f}",
+                'Placed': placed_count,
+                'Placement Rate': f"{placement_rate:.1f}%"
+            })
+        
+        # Display the summary table
+        if summary_data:
+            st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+        else:
+            st.info("No data available for placement statistics.")
+        
+        # CGPA distribution by department
+        st.subheader("CGPA Distribution by Department")
+        
+        # Create a pivot table for visualization
+        try:
+            # For numeric columns only
+            numeric_data = self.students_df[['department', 'cgpa']].copy()
+            pivot_table = numeric_data.pivot_table(
+                values='cgpa', 
+                index='department', 
+                aggfunc=['mean', 'count', 'min', 'max']
+            )
+            
+            # Flatten column names
+            pivot_table.columns = ['Avg CGPA', 'Count', 'Min CGPA', 'Max CGPA']
+            pivot_table = pivot_table.reset_index()
+            
+            # Format numeric columns
+            pivot_table['Avg CGPA'] = pivot_table['Avg CGPA'].round(2)
+            
+            st.dataframe(pivot_table, use_container_width=True)
+            
+            # Also show as a bar chart
+            if not pivot_table.empty:
+                chart_data = pivot_table[['department', 'Avg CGPA']].set_index('department')
+                st.bar_chart(chart_data)
+                
+        except Exception as e:
+            st.warning(f"Could not create detailed analysis: {str(e)}")
+            # Fallback: simple department-CGPA table
+            simple_table = self.students_df[['department', 'cgpa']].groupby('department').agg({
+                'cgpa': ['mean', 'count']
+            }).round(2)
+            st.dataframe(simple_table, use_container_width=True)
