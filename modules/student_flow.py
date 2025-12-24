@@ -805,14 +805,14 @@ class StudentFlow:
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step"):
+            if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
                 from modules.workflow_manager import WorkflowManager
                 workflow = WorkflowManager()
                 workflow.workflows["student"]["current_step"] = current_step - 1
                 st.rerun()
         
         with col3:
-            if current_step < 8 and st.button("Next Step ➡️"):
+            if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
                 from modules.workflow_manager import WorkflowManager
                 workflow = WorkflowManager()
                 workflow.workflows["student"]["current_step"] = current_step + 1
