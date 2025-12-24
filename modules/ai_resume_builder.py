@@ -1,170 +1,218 @@
 import streamlit as st
 import pandas as pd
-from openai import OpenAI
-import PyPDF2
-import docx
 import json
+import base64
+from datetime import datetime
 
 class AIResumeBuilder:
     def __init__(self):
-        self.client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", ""))
-        self.sample_resumes = self.load_sample_resumes()
+        self.template_options = {
+            "Professional": "Clean and formal design suitable for corporate jobs",
+            "Creative": "Modern design with color accents for creative roles",
+            "Academic": "Traditional format suitable for research and academic positions",
+            "Minimalist": "Simple and elegant design focusing on content"
+        }
     
     def display(self):
+        """Display AI Resume Builder interface"""
         st.header("🤖 AI-Powered Resume Builder")
         
-        # Resume input options
-        input_method = st.radio(
-            "Choose input method:",
-            ["📝 Manual Entry", "📁 Upload Resume", "🔗 Import from LinkedIn", "🎮 Demo Mode"]
-        )
-        
-        if input_method == "🎮 Demo Mode":
+        # Check if user is in demo mode
+        if 'demo_mode' in st.session_state and st.session_state.demo_mode:
+            st.info("🎮 Demo Mode Active - Using sample student data")
             self.demo_mode()
-        elif input_method == "📁 Upload Resume":
-            self.upload_resume()
-        elif input_method == "🔗 Import from LinkedIn":
-            self.linkedin_import()
-        else:
-            self.manual_entry()
+            return
+        
+        # Main interface
+        tab1, tab2, tab3 = st.tabs(["📝 Build Resume", "🔄 Optimize Resume", "📊 ATS Checker"])
+        
+        with tab1:
+            self.build_resume()
+        
+        with tab2:
+            self.optimize_resume()
+        
+        with tab3:
+            self.ats_checker()
     
-    def manual_entry(self):
-        """Manual resume entry form"""
-        with st.form("resume_form"):
+    def build_resume(self):
+        """Build resume from scratch"""
+        st.subheader("Create Your Resume")
+        
+        with st.form("resume_builder_form"):
+            # Personal Information
+            st.markdown("### Personal Information")
             col1, col2 = st.columns(2)
+            
             with col1:
-                name = st.text_input("Full Name*")
+                full_name = st.text_input("Full Name*")
                 email = st.text_input("Email*")
-                phone = st.text_input("Phone")
-                linkedin = st.text_input("LinkedIn Profile")
+                phone = st.text_input("Phone Number")
+            
             with col2:
-                target_role = st.text_input("Target Role*")
-                experience = st.number_input("Years of Experience", min_value=0, max_value=50)
-                education = st.selectbox("Highest Education", 
-                    ["High School", "Bachelor's", "Master's", "PhD"])
+                linkedin = st.text_input("LinkedIn Profile URL")
+                github = st.text_input("GitHub Profile URL")
+                portfolio = st.text_input("Portfolio Website")
             
-            # Skills input with autocomplete suggestions [citation:4]
-            skills = st.multiselect(
-                "Skills*",
-                options=["Python", "Java", "JavaScript", "React", "Node.js", 
-                        "AWS", "Docker", "Kubernetes", "SQL", "Machine Learning",
-                        "Data Analysis", "Project Management", "Agile", "Communication"],
-                default=["Python", "SQL"]
-            )
+            # Education
+            st.markdown("### Education")
+            col1, col2, col3 = st.columns(3)
             
-            # Experience details
-            st.subheader("Work Experience")
-            exp_company = st.text_input("Company Name")
-            exp_role = st.text_input("Job Title")
-            exp_duration = st.text_input("Duration (e.g., 2020-2023)")
-            exp_description = st.text_area("Responsibilities and Achievements")
+            with col1:
+                degree = st.text_input("Degree*", "Bachelor of Technology")
+                university = st.text_input("University*", "ABC University")
+            
+            with col2:
+                major = st.text_input("Major*", "Computer Science")
+                cgpa = st.number_input("CGPA/Percentage*", 0.0, 10.0, 8.5, 0.1)
+            
+            with col3:
+                grad_year = st.number_input("Graduation Year*", 2000, 2030, 2024)
+                location = st.text_input("Location", "City, Country")
+            
+            # Work Experience
+            st.markdown("### Work Experience")
+            experience_count = st.number_input("Number of Experiences", 0, 5, 1)
+            
+            experiences = []
+            for i in range(experience_count):
+                st.markdown(f"**Experience {i+1}**")
+                exp_col1, exp_col2 = st.columns(2)
+                
+                with exp_col1:
+                    company = st.text_input(f"Company {i+1}", key=f"company_{i}")
+                    position = st.text_input(f"Position {i+1}", key=f"position_{i}")
+                
+                with exp_col2:
+                    duration = st.text_input(f"Duration {i+1} (e.g., Jan 2023 - Present)", key=f"duration_{i}")
+                    location_exp = st.text_input(f"Location {i+1}", key=f"location_exp_{i}")
+                
+                description = st.text_area(f"Description {i+1}", 
+                    key=f"desc_{i}", 
+                    height=100,
+                    value="• Developed and maintained web applications\n• Collaborated with cross-functional teams\n• Implemented new features and fixed bugs")
+                
+                experiences.append({
+                    'company': company,
+                    'position': position,
+                    'duration': duration,
+                    'location': location_exp,
+                    'description': description
+                })
+            
+            # Skills
+            st.markdown("### Skills")
+            skill_categories = {
+                "Technical Skills": ["Python", "Java", "JavaScript", "React", "Node.js", 
+                                   "SQL", "AWS", "Docker", "Git", "Machine Learning"],
+                "Soft Skills": ["Communication", "Leadership", "Teamwork", "Problem Solving", 
+                              "Time Management", "Adaptability"],
+                "Tools": ["VS Code", "JIRA", "Figma", "Postman", "Tableau", "Power BI"]
+            }
+            
+            selected_skills = {}
+            for category, skills in skill_categories.items():
+                selected_skills[category] = st.multiselect(
+                    category,
+                    skills,
+                    default=skills[:2] if category == "Technical Skills" else []
+                )
             
             # Projects
-            st.subheader("Projects")
-            project_title = st.text_input("Project Title")
-            project_desc = st.text_area("Project Description")
+            st.markdown("### Projects")
+            project_count = st.number_input("Number of Projects", 0, 5, 1)
             
-            if st.form_submit_button("🚀 Generate AI-Optimized Resume"):
-                self.generate_resume({
-                    "name": name,
-                    "contact": {"email": email, "phone": phone, "linkedin": linkedin},
-                    "target_role": target_role,
-                    "skills": skills,
-                    "experience": [{
-                        "company": exp_company,
-                        "role": exp_role,
-                        "duration": exp_duration,
-                        "description": exp_description
-                    }],
-                    "projects": [{
-                        "title": project_title,
-                        "description": project_desc
-                    }],
-                    "education": education
+            projects = []
+            for i in range(project_count):
+                st.markdown(f"**Project {i+1}**")
+                proj_col1, proj_col2 = st.columns(2)
+                
+                with proj_col1:
+                    proj_title = st.text_input(f"Project Title {i+1}", key=f"proj_title_{i}")
+                    proj_tech = st.text_input(f"Technologies Used {i+1}", key=f"proj_tech_{i}")
+                
+                with proj_col2:
+                    proj_duration = st.text_input(f"Duration {i+1}", key=f"proj_duration_{i}")
+                    proj_link = st.text_input(f"Project Link {i+1}", key=f"proj_link_{i}")
+                
+                proj_desc = st.text_area(f"Description {i+1}", 
+                    key=f"proj_desc_{i}", 
+                    height=80,
+                    value="• Developed a web application for [purpose]\n• Implemented [key features]\n• Achieved [results/impact]")
+                
+                projects.append({
+                    'title': proj_title,
+                    'technologies': proj_tech,
+                    'duration': proj_duration,
+                    'link': proj_link,
+                    'description': proj_desc
                 })
+            
+            # Template Selection
+            st.markdown("### Resume Template")
+            template = st.selectbox("Choose a Template", list(self.template_options.keys()),
+                                  format_func=lambda x: f"{x} - {self.template_options[x]}")
+            
+            # AI Enhancement Options
+            st.markdown("### AI Enhancement")
+            ai_options = st.multiselect(
+                "Select AI enhancements for your resume:",
+                ["Optimize Keywords for ATS", "Improve Action Verbs", 
+                 "Add Metrics and Quantifiable Results", "Suggest Missing Sections",
+                 "Check Grammar and Style"]
+            )
+            
+            # Submit button
+            if st.form_submit_button("🚀 Generate AI-Optimized Resume"):
+                # Collect all data
+                resume_data = {
+                    'personal_info': {
+                        'name': full_name,
+                        'email': email,
+                        'phone': phone,
+                        'linkedin': linkedin,
+                        'github': github,
+                        'portfolio': portfolio
+                    },
+                    'education': {
+                        'degree': degree,
+                        'university': university,
+                        'major': major,
+                        'cgpa': cgpa,
+                        'year': grad_year,
+                        'location': location
+                    },
+                    'experience': experiences,
+                    'skills': selected_skills,
+                    'projects': projects,
+                    'template': template,
+                    'ai_enhancements': ai_options,
+                    'generated_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                # Generate resume
+                self.generate_resume(resume_data)
     
     def generate_resume(self, resume_data):
-        """Generate AI-optimized resume"""
-        with st.spinner("AI is optimizing your resume..."):
-            # Create prompt for AI optimization
-            prompt = f"""
-            Optimize this resume for a {resume_data['target_role']} position:
-            
-            Name: {resume_data['name']}
-            Skills: {', '.join(resume_data['skills'])}
-            Experience: {resume_data['experience'][0]['description'] if resume_data['experience'] else 'None'}
-            Education: {resume_data['education']}
-            
-            Provide:
-            1. Professional summary
-            2. Skills categorized by relevance
-            3. Experience rewritten with action verbs and metrics
-            4. ATS optimization tips
-            5. Keywords to include
-            """
-            
-            try:
-                # Call OpenAI API
-                response = self.client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You are a professional resume writer and ATS optimization expert."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=1000
-                )
-                
-                ai_suggestions = response.choices[0].message.content
-                
-                # Display results
-                st.success("✅ Resume optimized successfully!")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("📄 Original Information")
-                    st.json(resume_data, expanded=False)
-                
-                with col2:
-                    st.subheader("🤖 AI Suggestions")
-                    st.markdown(ai_suggestions)
-                
-                # Download options
-                st.subheader("📥 Download Options")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button("📝 Download as PDF"):
-                        st.info("PDF generation would be implemented with ReportLab or similar")
-                with col2:
-                    if st.button("📄 Download as DOCX"):
-                        st.info("DOCX generation would be implemented with python-docx")
-                with col3:
-                    if st.button("📋 Copy to Clipboard"):
-                        st.info("Would copy formatted resume to clipboard")
-            
-            except Exception as e:
-                st.error(f"Error generating resume: {str(e)}")
-    
-    def demo_mode(self):
-        """Demo mode with sample data [citation:3]"""
-        st.info("Demo Mode: Using sample student data")
+        """Generate and display resume"""
+        st.success("✅ Resume generated successfully!")
         
-        sample_data = {
-            "name": "Rahul Sharma",
-            "contact": {"email": "rahul.sharma@example.com", "phone": "+91 9876543210"},
-            "target_role": "Software Development Engineer",
-            "skills": ["Python", "JavaScript", "React", "Node.js", "AWS", "Docker"],
-            "experience": [{
-                "company": "Tech Innovations Pvt Ltd",
-                "role": "Software Developer Intern",
-                "duration": "June 2023 - Present",
-                "description": "Developed and maintained web applications using React and Node.js"
-            }],
-            "education": "Bachelor's in Computer Science"
-        }
+        # Display resume preview
+        st.subheader("📄 Resume Preview")
         
-        # Display sample data and generate
-        st.json(sample_data, expanded=False)
+        # Create resume HTML preview
+        html_resume = self.create_html_resume(resume_data)
         
-        if st.button("🚀 Generate Sample Resume"):
-            self.generate_resume(sample_data)
+        # Display in expandable preview
+        with st.expander("Preview Resume", expanded=True):
+            st.markdown(html_resume, unsafe_allow_html=True)
+        
+        # AI Suggestions
+        if resume_data.get('ai_enhancements'):
+            st.subheader("🤖 AI Suggestions")
+            
+            suggestions = []
+            if "Optimize Keywords for ATS" in resume_data['ai_enhancements']:
+                suggestions.append("**ATS Optimization:** Add keywords like 'agile methodology', 'cross-functional collaboration', 'SDLC'")
+            if "Improve Action Verbs" in resume_data['ai_enhancements']:
+                suggestions.append("**Action Verbs:** Replace 'did' with stronger verbs like '
