@@ -4,15 +4,21 @@ pandas>=2.0.0
 numpy>=1.24.0
 plotly>=5.17.0
 
-# Database (optional)
-sqlalchemy>=2.0.0
-pymongo>=4.5.0
+# Database
+sqlite3  # Built-in
+
+# Security
+bcrypt>=4.0.0  # For password hashing (optional)
+python-jose>=3.3.0  # For JWT tokens (optional)
+
+# Data processing
+python-dotenv>=1.0.0
+joblib>=1.3.0
 
 # AI/ML (optional)
 scikit-learn>=1.3.0
 openai>=1.0.0
 langchain>=0.0.300
 
-# Utilities
-python-dotenv>=1.0.0
-joblib>=1.3.0
+# Testing
+pytest>=7.4.0
