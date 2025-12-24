@@ -192,6 +192,63 @@ class AIResumeBuilder:
                 
                 # Generate resume
                 self.generate_resume(resume_data)
+
+    def generate_cover_letter(self, resume_data, company_name, job_title):
+        """Generate AI-powered cover letter"""
+        cover_letter_template = f"""
+        {resume_data['personal_info']['name']}
+        {resume_data['personal_info']['email']} | {resume_data['personal_info']['phone']}
+    
+        Hiring Manager
+        {company_name}
+    
+        Dear Hiring Manager,
+    
+        I am writing to express my interest in the {job_title} position at {company_name}. 
+        
+        With my background in {resume_data['education']['major']} from {resume_data['education']['university']}, 
+        where I maintained a CGPA of {resume_data['education']['cgpa']}, I have developed strong skills in:
+    
+        {', '.join(resume_data['skills'].get('Technical Skills', []))}
+    
+        In my previous experience, I:
+        {resume_data['experience'][0]['description'] if resume_data.get('experience') else 'Gained practical experience through academic projects'}
+    
+        I am particularly excited about the opportunity at {company_name} because...
+    
+        Thank you for considering my application. I look forward to discussing how my skills 
+        and experiences align with the needs of your team.
+    
+        Sincerely,
+        {resume_data['personal_info']['name']}
+        """
+    
+        return cover_letter_template
+
+def analyze_resume_gaps(self, resume_data, target_role):
+    """Analyze resume for gaps compared to target role"""
+    gaps = []
+    
+    # Common requirements for tech roles
+    role_requirements = {
+        "Software Development Engineer": ["Data Structures", "Algorithms", "System Design", "OOP"],
+        "Data Scientist": ["Statistics", "Machine Learning", "Python", "SQL", "Data Visualization"],
+        "Product Manager": ["Product Strategy", "User Research", "Data Analysis", "Communication"]
+    }
+    
+    target_skills = role_requirements.get(target_role, [])
+    resume_skills = []
+    
+    # Extract all skills from resume
+    for category, skill_list in resume_data.get('skills', {}).items():
+        resume_skills.extend([s.lower() for s in skill_list])
+    
+    # Find missing skills
+    for required_skill in target_skills:
+        if required_skill.lower() not in resume_skills:
+            gaps.append(f"Missing: {required_skill}")
+    
+    return gaps
     
     def generate_resume(self, resume_data):
         """Generate and display resume"""
@@ -224,17 +281,55 @@ class AIResumeBuilder:
         
         # Download options
         st.subheader("📥 Download Options")
-        
+
+        # Create columns for download buttons
         col1, col2, col3 = st.columns(3)
+
         with col1:
-            if st.button("📝 Download as PDF"):
-                st.info("PDF generation would be implemented with external library")
+            # HTML Download
+            html_href, html_filename = self.download_resume(resume_data, "html")
+            st.markdown(f"""
+            <a href="{html_href}" download="{html_filename}">
+                <button style="width:100%; padding:10px; background:#3498db; color:white; border:none; border-radius:5px; cursor:pointer;">
+                    📝 Download as HTML
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
+
         with col2:
-            if st.button("📄 Download as DOCX"):
-                st.info("DOCX generation would be implemented with python-docx")
+            # Text Download
+            txt_href, txt_filename = self.download_resume(resume_data, "text")
+            st.markdown(f"""
+            <a href="{txt_href}" download="{txt_filename}">
+                <button style="width:100%; padding:10px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer;">
+                    📄 Download as Text
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
+
         with col3:
-            if st.button("📋 Copy HTML to Clipboard"):
-                st.info("Would copy HTML to clipboard")
+            # Copy to Clipboard
+            if st.button("📋 Copy HTML to Clipboard", use_container_width=True):
+                # For Streamlit Cloud, we need a workaround
+                import pyperclip
+                try:
+                    pyperclip.copy(html_content)
+                    st.success("HTML copied to clipboard!")
+                except:
+                    st.info("""
+                    **To copy:**
+                    1. Right-click on the preview
+                    2. Select "Inspect" or "View Source"
+                    3. Copy the HTML code
+                    """)
+
+        # Add PDF generation note
+        st.info("""
+        **💡 PDF Generation:** For PDF export, download the HTML version and use:
+        - **Browser:** Print → Save as PDF
+        - **Online:** Convert with online HTML to PDF tools
+        - **Desktop:** Use LibreOffice or Microsoft Word
+        """)
     
     def create_html_resume(self, resume_data):
         """Create HTML representation of resume with better styling"""
