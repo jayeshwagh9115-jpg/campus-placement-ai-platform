@@ -73,23 +73,17 @@ class WorkflowManager:
         for step in steps:
             if step["id"] < current_step:
                 status_icon = "✅"
-                status_color = "#4CAF50"
-                status_text = f"~~{step['name']}~~"
             elif step["id"] == current_step:
                 status_icon = "🔄"
-                status_color = "#2196F3"
-                status_text = f"**{step['name']}**"
             else:
                 status_icon = "⏳"
-                status_color = "#9E9E9E"
-                status_text = step['name']
             
             # Create clickable step
             if step["id"] <= current_step:
                 if st.button(
                     f"{status_icon} Step {step['id']}: {step['name']}",
                     key=f"student_step_{step['id']}",
-                    use_container_width=True,
+                    width='stretch',
                     type="primary" if step["id"] == current_step else "secondary"
                 ):
                     st.session_state.current_step_student = step["id"]
@@ -98,7 +92,7 @@ class WorkflowManager:
                 st.button(
                     f"{status_icon} Step {step['id']}: {step['name']}",
                     key=f"student_step_{step['id']}",
-                    use_container_width=True,
+                    width='stretch',
                     disabled=True
                 )
         
@@ -106,11 +100,11 @@ class WorkflowManager:
         st.divider()
         col1, col2 = st.columns(2)
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous", key="student_prev", use_container_width=True):
+            if current_step > 1 and st.button("⬅️ Previous", key="student_prev", width='stretch'):
                 st.session_state.current_step_student = current_step - 1
                 st.rerun()
         with col2:
-            if current_step < len(steps) and st.button("Next ➡️", key="student_next", use_container_width=True):
+            if current_step < len(steps) and st.button("Next ➡️", key="student_next", width='stretch'):
                 st.session_state.current_step_student = current_step + 1
                 st.rerun()
     
@@ -131,20 +125,17 @@ class WorkflowManager:
         for step in steps:
             if step["id"] < current_step:
                 status_icon = "✅"
-                status_color = "#4CAF50"
             elif step["id"] == current_step:
                 status_icon = "🔄"
-                status_color = "#2196F3"
             else:
                 status_icon = "⏳"
-                status_color = "#9E9E9E"
             
             # Create clickable step
             if step["id"] <= current_step:
                 if st.button(
                     f"{status_icon} Step {step['id']}: {step['name']}",
                     key=f"college_step_{step['id']}",
-                    use_container_width=True,
+                    width='stretch',
                     type="primary" if step["id"] == current_step else "secondary"
                 ):
                     st.session_state.current_step_college = step["id"]
@@ -153,7 +144,7 @@ class WorkflowManager:
                 st.button(
                     f"{status_icon} Step {step['id']}: {step['name']}",
                     key=f"college_step_{step['id']}",
-                    use_container_width=True,
+                    width='stretch',
                     disabled=True
                 )
         
@@ -161,11 +152,11 @@ class WorkflowManager:
         st.divider()
         col1, col2 = st.columns(2)
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous", key="college_prev", use_container_width=True):
+            if current_step > 1 and st.button("⬅️ Previous", key="college_prev", width='stretch'):
                 st.session_state.current_step_college = current_step - 1
                 st.rerun()
         with col2:
-            if current_step < len(steps) and st.button("Next ➡️", key="college_next", use_container_width=True):
+            if current_step < len(steps) and st.button("Next ➡️", key="college_next", width='stretch'):
                 st.session_state.current_step_college = current_step + 1
                 st.rerun()
     
