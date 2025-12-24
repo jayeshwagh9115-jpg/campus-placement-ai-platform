@@ -504,6 +504,82 @@ Experience: Developed web applications at Tech Company"""
                 
                 for issue in issues:
                     st.error(issue)
+
+    def download_resume(self, resume_data, format_type):
+        """Generate and download resume in different formats"""
+        html_content = self.create_html_resume(resume_data)
+    
+        if format_type == "html":
+            # Create HTML file
+            html_file = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Resume - {resume_data['personal_info']['name']}</title>
+                <style>
+                    @media print {{
+                        body {{ margin: 0; padding: 0; }}
+                        .resume-container {{ box-shadow: none !important; }}
+                    }}
+                </style>
+            </head>
+            <body>
+                {html_content}
+            </body>
+            </html>
+            """
+        
+            # Create download link
+            import base64
+            b64 = base64.b64encode(html_file.encode()).decode()
+            href = f'data:text/html;base64,{b64}'
+        
+            return href, f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.html"
+    
+        elif format_type == "text":
+            # Create plain text version
+            text_content = f"""
+            RESUME - {resume_data['personal_info']['name']}
+            {'='*50}
+        
+            CONTACT INFORMATION
+            Email: {resume_data['personal_info']['email']}
+            Phone: {resume_data['personal_info']['phone']}
+            LinkedIn: {resume_data['personal_info']['linkedin'] or 'N/A'}
+        
+            EDUCATION
+            {resume_data['education']['degree']} in {resume_data['education']['major']}
+            {resume_data['education']['university']}
+            CGPA: {resume_data['education']['cgpa']} | Graduation: {resume_data['education']['year']}
+        
+            """
+        
+            # Add experience
+            if resume_data.get('experience'):
+                text_content += "\nEXPERIENCE\n"
+                for exp in resume_data['experience']:
+                    text_content += f"\n{exp['position']} at {exp['company']}\n"
+                    text_content += f"{exp['duration']} | {exp['location']}\n"
+                    if exp['description']:
+                        text_content += f"{exp['description']}\n"
+        
+            # Add skills
+            if resume_data.get('skills'):
+                text_content += "\nSKILLS\n"
+                for category, skill_list in resume_data['skills'].items():
+                    if skill_list:
+                        text_content += f"\n{category}: {', '.join(skill_list)}"
+        
+            text_content += f"\n\nGenerated: {resume_data['generated_date']}"
+        
+            b64 = base64.b64encode(text_content.encode()).decode()
+            href = f'data:text/plain;base64,{b64}'
+        
+            return href, f"resume_{resume_data['personal_info']['name'].replace(' ', '_')}.txt"
+    
+        return None, None
     
     def demo_mode(self):
         """Demo mode with sample data"""
