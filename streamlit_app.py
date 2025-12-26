@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from database.db_manager import db_manager
 from modules.workflow_manager import WorkflowManager
 from modules.student_flow import StudentFlow
 from modules.college_flow import CollegeFlow
@@ -14,24 +13,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize database session
-if 'db' not in st.session_state:
-    st.session_state.db = db_manager
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'student' not in st.session_state:
-    st.session_state.student = None
+# Initialize session state
+if 'workflow_manager' not in st.session_state:
+    st.session_state.workflow_manager = WorkflowManager()
 
-# Initialize workflow manager
-workflow = WorkflowManager()
-
-# Initialize user flows
 if 'student_flow' not in st.session_state:
     st.session_state.student_flow = StudentFlow()
+
 if 'college_flow' not in st.session_state:
     st.session_state.college_flow = CollegeFlow()
+
 if 'recruiter_flow' not in st.session_state:
     st.session_state.recruiter_flow = RecruiterFlow()
+
+# Initialize role in session state
+if 'selected_role' not in st.session_state:
+    st.session_state.selected_role = None
 
 # Title and description
 st.title("🎓 AI-Powered Campus Placement Management System")
@@ -40,111 +37,127 @@ st.markdown("""
 **A Systematic End-to-End Placement Management Platform**
 """)
 
-# Sidebar for authentication
+# Sidebar for workflow selection
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=100)
+    st.title("Platform Navigation")
     
-    if st.session_state.user is None:
-        # Login form
-        st.subheader("🔐 Login")
-        
-        with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            login_as = st.selectbox("Login as", ["Student", "College Admin", "Recruiter"])
-            
-            if st.form_submit_button("Login"):
-                user = db_manager.authenticate_user(username, password)
-                if user:
-                    st.session_state.user = user
-                    st.session_state.role = login_as.lower()
-                    
-                    # Load student data if student
-                    if login_as.lower() == 'student':
-                        student = db_manager.get_student_by_user_id(user['user_id'])
-                        if student:
-                            st.session_state.student = student
-                    
-                    st.success(f"Welcome {user['full_name']}!")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
-        
-        # Demo mode
-        if st.button("🎮 Try Demo Mode"):
-            st.session_state.demo_mode = True
-            st.session_state.role = 'student'
-            st.rerun()
+    # Role selection
+    st.subheader("Select Your Role")
     
+    # Use radio buttons for role selection
+    role = st.radio(
+        "Choose your role:",
+        ["👨‍🎓 Student", "🏫 College Admin", "💼 Recruiter", "👀 Observer"],
+        key="role_selection",
+        label_visibility="collapsed"
+    )
+    
+    # Store selected role in session state
+    if role != st.session_state.get('selected_role'):
+        st.session_state.selected_role = role
+        st.rerun()
+    
+    st.divider()
+    
+    # Show workflow based on selected role
+    if st.session_state.selected_role == "👨‍🎓 Student":
+        st.session_state.workflow_manager.display_student_workflow()
+        
+    elif st.session_state.selected_role == "🏫 College Admin":
+        st.session_state.workflow_manager.display_college_workflow()
+        
+    elif st.session_state.selected_role == "💼 Recruiter":
+        st.session_state.workflow_manager.display_recruiter_workflow()
+        
     else:
-        # User is logged in
-        st.subheader(f"👋 Welcome, {st.session_state.user['full_name']}")
-        st.write(f"**Role:** {st.session_state.role.title()}")
-        
-        # Role-based navigation
-        user_role = st.radio(
-            "Select Workflow:",
-            ["👨‍🎓 Student Journey", "🏫 College Management", "💼 Recruiter Portal"],
-            key="workflow_selection"
-        )
-        
-        # Logout button
-        if st.button("🚪 Logout"):
-            st.session_state.user = None
-            st.session_state.student = None
-            st.session_state.role = None
-            st.rerun()
+        st.session_state.workflow_manager.display_observer_dashboard()
+    
+    # Demo mode toggle
+    st.divider()
+    if st.button("🎮 Toggle Demo Mode", use_container_width=True):
+        st.session_state.demo_mode = not st.session_state.get('demo_mode', False)
+        st.rerun()
+    
+    if st.session_state.get('demo_mode', False):
+        st.success("Demo Mode Active")
+    
+    # Footer
+    st.divider()
+    st.caption("🎓 Hackathon Project 2024")
 
-# Main content area
-if st.session_state.user is None and not st.session_state.get('demo_mode', False):
-    # Show landing page
-    st.info("👈 Please login from the sidebar to access the platform")
-    
-    # Platform overview
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("### 🗄️ Database Backed")
-        st.write("Secure SQLite database with complete data persistence")
-    with col2:
-        st.markdown("### 🔄 Systematic Workflow")
-        st.write("End-to-end placement management with proper flow")
-    with col3:
-        st.markdown("### 🤖 AI Integrated")
-        st.write("Intelligent resume building and placement prediction")
-    
-    # Database statistics
-    try:
-        stats = db_manager.get_placement_statistics()
-        st.subheader("📊 Platform Statistics")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Students", stats.get('total_students', 0))
-        with col2:
-            st.metric("Placement Rate", f"{stats.get('placement_rate', 0):.1f}%")
-        with col3:
-            st.metric("Avg CGPA", f"{stats.get('avg_cgpa', 0):.2f}")
-        with col4:
-            st.metric("Avg Package", f"₹{stats.get('avg_package', 0):.1f}L")
-    except:
-        pass
-
-elif st.session_state.get('demo_mode', False):
-    # Demo mode
-    st.info("🎮 **Demo Mode Active** - Using sample data")
-    workflow.display_observer_view()
-    
-elif st.session_state.role == 'student':
-    # Student workflow
+# Main content area - Show selected workflow
+if st.session_state.selected_role == "👨‍🎓 Student":
+    # Get current step and display appropriate module
+    current_step = st.session_state.get('current_step_student', 1)
+    st.session_state.student_flow.current_step = current_step
     st.session_state.student_flow.display()
     
-elif st.session_state.role == 'college_admin':
-    # College admin workflow
+elif st.session_state.selected_role == "🏫 College Admin":
+    # Get current step and display appropriate module
+    current_step = st.session_state.get('current_step_college', 1)
+    st.session_state.college_flow.current_step = current_step
     st.session_state.college_flow.display()
     
-elif st.session_state.role == 'recruiter':
-    # Recruiter workflow
+elif st.session_state.selected_role == "💼 Recruiter":
     st.session_state.recruiter_flow.display()
+    
+else:
+    # Observer view
+    st.session_state.workflow_manager.display_observer_view()
+    
+    # Add platform overview for observers
+    st.header("🚀 Platform Features Overview")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 👨‍🎓 Student Features")
+        features = [
+            "✅ AI Resume Builder",
+            "✅ Career Path Planning",
+            "✅ Placement Prediction",
+            "✅ Interview Preparation",
+            "✅ NEP Course Advisor",
+            "✅ PM Internship Match"
+        ]
+        for feature in features:
+            st.write(feature)
+    
+    with col2:
+        st.markdown("### 🏫 College Admin Features")
+        features = [
+            "✅ Student Database",
+            "✅ Analytics Dashboard",
+            "✅ Company Registration",
+            "✅ Drive Scheduling",
+            "✅ Student-Company Matching",
+            "✅ Interview Management",
+            "✅ Placement Records",
+            "✅ Performance Reports"
+        ]
+        for feature in features:
+            st.write(feature)
+    
+    with col3:
+        st.markdown("### 💼 Recruiter Features")
+        features = [
+            "✅ Company Profile",
+            "✅ Job Posting",
+            "✅ Candidate Search",
+            "✅ AI Screening",
+            "✅ Interview Scheduling",
+            "✅ Offer Management",
+            "✅ Hiring Analytics"
+        ]
+        for feature in features:
+            st.write(feature)
 
 # Footer
 st.divider()
-st.caption("🎓 AI Campus Placement Platform | Database Integrated | National Level Hackathon")
+st.markdown("""
+<div style="text-align: center">
+    <p>🎓 <b>AI Campus Placement Platform</b> | National Level Hackathon Project</p>
+    <p>Built with ❤️ using Streamlit & Python | Database Integrated | Systematic Workflow</p>
+</div>
+""", unsafe_allow_html=True)
