@@ -213,7 +213,7 @@ class CollegeFlow:
         current_step = st.session_state.get('current_step_college', 1)
         self.current_step = current_step
     
-        # Display step header with better styling
+        # Display step header
         step_names = {
             1: "👨‍🎓 Student Database",
             2: "📊 Analytics Dashboard",
@@ -224,16 +224,15 @@ class CollegeFlow:
             7: "✅ Placement Records",
             8: "📈 Performance Reports"
         }
-        
-        # Create a nice header with step information
+    
+        # Create header with progress
         col1, col2 = st.columns([3, 1])
         with col1:
             st.subheader(f"Step {current_step}: {step_names[current_step]}")
         with col2:
-            total_steps = 8
-            progress = current_step / total_steps
+            progress = current_step / 8
             st.progress(progress)
-            st.caption(f"Step {current_step} of {total_steps}")
+            st.caption(f"Step {current_step} of 8")
     
         # Display appropriate step
         if current_step == 1:
@@ -253,8 +252,7 @@ class CollegeFlow:
         elif current_step == 8:
             self.step8_performance_reports()
     
-        # Navigation buttons at bottom
-        st.divider()
+        # Navigation
         self.display_workflow_navigation(current_step)
     
     def step1_student_database(self):
@@ -310,10 +308,10 @@ class CollegeFlow:
             default=["student_id", "name", "department", "cgpa", "placement_status", "company"])
         
         if display_cols:
-            st.dataframe(filtered_students[display_cols], use_container_width=True, height=400)
+            st.dataframe(filtered_students[display_cols], width='stretch', height=400)
             
             # Export option
-            if st.button("📥 Export to CSV"):
+            if st.button("📥 Export to CSV", width='stretch'):
                 csv = filtered_students[display_cols].to_csv(index=False)
                 st.download_button(
                     label="Download CSV",
@@ -392,14 +390,14 @@ class CollegeFlow:
                          title="Placement Rate by Department",
                          color="placement_rate",
                          color_continuous_scale="Viridis")
-            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(fig1, width='stretch')
             
             # Department-wise packages
             dept_packages = self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"]
             if not dept_packages.empty:
                 fig2 = px.box(dept_packages, x="department", y="package",
                              title="Package Distribution by Department")
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width='stretch')
         
         with tab2:
             # Company-wise statistics
@@ -614,7 +612,7 @@ class CollegeFlow:
                     # Action buttons
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        if st.button(f"📅 Schedule Drive", key=f"schedule_{company['company_id']}"):
+                        if st.button(f"📅 Schedule Drive", key=f"schedule_{company['company_id']}", width='stretch'):
                             st.session_state.selected_company = company['name']
                             from modules.workflow_manager import WorkflowManager
                             workflow = WorkflowManager()
@@ -622,11 +620,11 @@ class CollegeFlow:
                             st.rerun()
                     
                     with col2:
-                        if st.button(f"✏️ Edit", key=f"edit_{company['company_id']}"):
+                        if st.button(f"✏️ Edit", key=f"edit_{company['company_id']}", width='stretch'):
                             st.info(f"Editing {company['name']} - Form would appear here")
                     
                     with col3:
-                        if st.button(f"📧 Contact", key=f"contact_{company['company_id']}"):
+                        if st.button(f"📧 Contact", key=f"contact_{company['company_id']}", width='stretch'):
                             st.info(f"Opening email to {company['contact_email']}")
             
             # Company statistics
@@ -826,15 +824,15 @@ class CollegeFlow:
                         # Action buttons
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            if st.button("👥 View Registrations", key=f"view_{drive['drive_id']}"):
+                            if st.button("👥 View Registrations", key=f"view_{drive['drive_id']}", width='stretch'):
                                 st.info(f"Showing registrations for {drive['company']} drive")
                         
                         with col2:
-                            if st.button("📝 Manage", key=f"manage_{drive['drive_id']}"):
+                            if st.button("📝 Manage", key=f"manage_{drive['drive_id']}", width='stretch'):
                                 st.info(f"Managing {drive['company']} drive")
                         
                         with col3:
-                            if drive['status'] == 'Scheduled' and st.button("✅ Mark Complete", key=f"complete_{drive['drive_id']}"):
+                            if drive['status'] == 'Scheduled' and st.button("✅ Mark Complete", key=f"complete_{drive['drive_id']}", width='stretch'):
                                 self.college_data["drives"].loc[
                                     self.college_data["drives"]["drive_id"] == drive['drive_id'], 
                                     'status'
@@ -924,7 +922,7 @@ class CollegeFlow:
                      "Civil Engineering", "Information Technology", "All"],
                     default=["Computer Science", "Information Technology"])
             
-            if st.button("🔍 Run AI Matching", type="primary"):
+            if st.button("🔍 Run AI Matching", type="primary", width='stretch'):
                 with st.spinner("Running AI matching algorithm..."):
                     # Simulate AI matching
                     import time
@@ -1018,7 +1016,7 @@ class CollegeFlow:
                 
                 package = st.number_input("Package (LPA)", 0.0, 50.0, 12.0, 0.5)
             
-            if st.button("✅ Create Manual Match", type="primary"):
+            if st.button("✅ Create Manual Match", type="primary", width='stretch'):
                 if selected_students and selected_company:
                     # Extract student IDs
                     student_ids = [s.split("(")[1].split(")")[0] for s in selected_students]
@@ -1258,9 +1256,7 @@ class CollegeFlow:
                         # Action buttons
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            if interview['status'] == 'Scheduled' and st.button(
-                                "✅ Mark Complete", key=f"complete_{interview['interview_id']}"
-                            ):
+                            if interview['status'] == 'Scheduled' and st.button("✅ Mark Complete", key=f"complete_{interview['interview_id']}", width='stretch'):
                                 self.college_data["interviews"].loc[
                                     self.college_data["interviews"]["interview_id"] == interview['interview_id'],
                                     'status'
@@ -1268,11 +1264,11 @@ class CollegeFlow:
                                 st.rerun()
                         
                         with col2:
-                            if st.button("✏️ Update", key=f"update_{interview['interview_id']}"):
+                            if st.button("✏️ Update", key=f"update_{interview['interview_id']}", width='stretch'):
                                 st.info(f"Update form for {interview['student_name']}")
                         
                         with col3:
-                            if st.button("📧 Remind", key=f"remind_{interview['interview_id']}"):
+                            if st.button("📧 Remind", key=f"remind_{interview['interview_id']}", width='stretch'):
                                 st.success(f"Reminder sent to {interview['student_name']}")
             else:
                 st.info("No interviews found with current filters")
@@ -1406,7 +1402,7 @@ class CollegeFlow:
                 default=["student_name", "department", "company", "job_role", "package", "placement_date"])
             
             if display_cols:
-                st.dataframe(filtered_placements[display_cols], use_container_width=True, height=400)
+                st.dataframe(filtered_placements[display_cols], width='stretch', height=400)
                 
                 # Export option
                 csv = filtered_placements[display_cols].to_csv(index=False)
@@ -1500,7 +1496,7 @@ class CollegeFlow:
                             # Action buttons
                             col1, col2 = st.columns(2)
                             with col1:
-                                if st.button("✅ Accept", key=f"accept_{offer['placement_id']}"):
+                                if st.button("✅ Accept", key=f"accept_{offer['placement_id']}", width='stretch'):
                                     self.college_data["placements"].loc[
                                         self.college_data["placements"]["placement_id"] == offer['placement_id'],
                                         'status'
@@ -1509,7 +1505,7 @@ class CollegeFlow:
                                     st.rerun()
                             
                             with col2:
-                                if st.button("❌ Decline", key=f"decline_{offer['placement_id']}"):
+                                if st.button("❌ Decline", key=f"decline_{offer['placement_id']}", width='stretch'):
                                     self.college_data["placements"].loc[
                                         self.college_data["placements"]["placement_id"] == offer['placement_id'],
                                         'status'
@@ -1712,7 +1708,7 @@ class CollegeFlow:
                     st.plotly_chart(fig, use_container_width=True)
                 
                 # Generate department report
-                if st.button("📄 Generate Department Report", type="primary"):
+                if st.button("📄 Generate Department Report", type="primary", width='stretch'):
                     st.success(f"Report generated for {selected_dept} department!")
                     
                     # Show report preview
@@ -1776,7 +1772,7 @@ class CollegeFlow:
                 package_range = st.slider("Package Range (LPA)", 0.0, 50.0, (0.0, 50.0))
             
             # Generate report
-            if st.button("🚀 Generate Custom Report", type="primary"):
+            if st.button("🚀 Generate Custom Report", type="primary", width='stretch'):
                 with st.spinner("Generating report..."):
                     import time
                     time.sleep(3)
@@ -1843,14 +1839,14 @@ class CollegeFlow:
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step"):
+            if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
                 from modules.workflow_manager import WorkflowManager
                 workflow = WorkflowManager()
                 workflow.workflows["college"]["current_step"] = current_step - 1
                 st.rerun()
         
         with col3:
-            if current_step < 8 and st.button("Next Step ➡️"):
+            if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
                 from modules.workflow_manager import WorkflowManager
                 workflow = WorkflowManager()
                 workflow.workflows["college"]["current_step"] = current_step + 1
