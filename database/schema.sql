@@ -1,3 +1,4 @@
+-- schema.sql
 -- Campus Placement Management System Database Schema
 
 -- Users Table (Unified for all roles)
@@ -14,7 +15,26 @@ CREATE TABLE IF NOT EXISTS users (
     is_active BOOLEAN DEFAULT 1
 );
 
--- Students Table
+-- Companies Table (Moved up to avoid circular dependency)
+CREATE TABLE IF NOT EXISTS companies (
+    company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_name VARCHAR(100) UNIQUE NOT NULL,
+    industry VARCHAR(50),
+    website TEXT,
+    description TEXT,
+    logo_url TEXT,
+    founded_year INTEGER,
+    employee_count VARCHAR(50),
+    headquarters VARCHAR(100),
+    contact_person VARCHAR(100),
+    contact_email VARCHAR(100),
+    contact_phone VARCHAR(15),
+    hr_email VARCHAR(100),
+    is_verified BOOLEAN DEFAULT 0,
+    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Students Table (Now companies table exists)
 CREATE TABLE IF NOT EXISTS students (
     student_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER UNIQUE NOT NULL,
@@ -32,7 +52,7 @@ CREATE TABLE IF NOT EXISTS students (
     placement_company_id INTEGER,
     placement_package DECIMAL(10,2),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (placement_company_id) REFERENCES companies(company_id)
+    FOREIGN KEY (placement_company_id) REFERENCES companies(company_id) ON DELETE SET NULL
 );
 
 -- Student Skills Table
@@ -104,7 +124,7 @@ CREATE TABLE IF NOT EXISTS colleges (
     total_students INTEGER DEFAULT 0,
     total_faculty INTEGER DEFAULT 0,
     placement_officer_id INTEGER,
-    FOREIGN KEY (placement_officer_id) REFERENCES users(user_id)
+    FOREIGN KEY (placement_officer_id) REFERENCES users(user_id) ON DELETE SET NULL
 );
 
 -- College Departments Table
@@ -119,25 +139,6 @@ CREATE TABLE IF NOT EXISTS college_departments (
     avg_package DECIMAL(10,2),
     FOREIGN KEY (college_id) REFERENCES colleges(college_id) ON DELETE CASCADE,
     UNIQUE(college_id, department_name)
-);
-
--- Companies Table
-CREATE TABLE IF NOT EXISTS companies (
-    company_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_name VARCHAR(100) UNIQUE NOT NULL,
-    industry VARCHAR(50),
-    website TEXT,
-    description TEXT,
-    logo_url TEXT,
-    founded_year INTEGER,
-    employee_count VARCHAR(50),
-    headquarters VARCHAR(100),
-    contact_person VARCHAR(100),
-    contact_email VARCHAR(100),
-    contact_phone VARCHAR(15),
-    hr_email VARCHAR(100),
-    is_verified BOOLEAN DEFAULT 0,
-    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Job Postings Table
@@ -176,8 +177,8 @@ CREATE TABLE IF NOT EXISTS campus_drives (
     drive_status VARCHAR(20) DEFAULT 'Scheduled' CHECK (drive_status IN ('Scheduled', 'Ongoing', 'Completed', 'Cancelled')),
     total_registered INTEGER DEFAULT 0,
     total_selected INTEGER DEFAULT 0,
-    FOREIGN KEY (college_id) REFERENCES colleges(college_id),
-    FOREIGN KEY (company_id) REFERENCES companies(company_id)
+    FOREIGN KEY (college_id) REFERENCES colleges(college_id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE
 );
 
 -- Drive Job Mapping Table
@@ -203,8 +204,8 @@ CREATE TABLE IF NOT EXISTS student_applications (
     applied_via VARCHAR(20) DEFAULT 'Portal',
     notes TEXT,
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (job_id) REFERENCES job_postings(job_id),
-    FOREIGN KEY (drive_id) REFERENCES campus_drives(drive_id),
+    FOREIGN KEY (job_id) REFERENCES job_postings(job_id) ON DELETE CASCADE,
+    FOREIGN KEY (drive_id) REFERENCES campus_drives(drive_id) ON DELETE SET NULL,
     UNIQUE(student_id, job_id)
 );
 
@@ -241,9 +242,9 @@ CREATE TABLE IF NOT EXISTS placements (
     offer_letter_url TEXT,
     placement_status VARCHAR(20) DEFAULT 'Offer Accepted' CHECK (placement_status IN ('Offer Pending', 'Offer Accepted', 'Offer Declined', 'Joined', 'Left')),
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (company_id) REFERENCES companies(company_id),
-    FOREIGN KEY (job_id) REFERENCES job_postings(job_id),
-    FOREIGN KEY (drive_id) REFERENCES campus_drives(drive_id)
+    FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES job_postings(job_id) ON DELETE CASCADE,
+    FOREIGN KEY (drive_id) REFERENCES campus_drives(drive_id) ON DELETE SET NULL
 );
 
 -- NEP Course Planning Table
@@ -290,7 +291,7 @@ CREATE TABLE IF NOT EXISTS student_resumes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (template_id) REFERENCES resume_templates(template_id)
+    FOREIGN KEY (template_id) REFERENCES resume_templates(template_id) ON DELETE SET NULL
 );
 
 -- Career Plans Table
@@ -363,17 +364,29 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
 );
 
--- Indexes for Performance
-CREATE INDEX idx_students_user_id ON students(user_id);
-CREATE INDEX idx_students_department ON students(department);
-CREATE INDEX idx_students_placement_status ON students(placement_status);
-CREATE INDEX idx_jobs_company_id ON job_postings(company_id);
-CREATE INDEX idx_jobs_is_active ON job_postings(is_active);
-CREATE INDEX idx_applications_student_id ON student_applications(student_id);
-CREATE INDEX idx_applications_job_id ON student_applications(job_id);
-CREATE INDEX idx_applications_status ON student_applications(application_status);
-CREATE INDEX idx_interviews_application_id ON interview_rounds(application_id);
-CREATE INDEX idx_drives_college_id ON campus_drives(college_id);
-CREATE INDEX idx_drives_company_id ON campus_drives(company_id);
-CREATE INDEX idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+-- Indexes for Performance (with IF NOT EXISTS to prevent errors)
+CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
+CREATE INDEX IF NOT EXISTS idx_students_department ON students(department);
+CREATE INDEX IF NOT EXISTS idx_students_placement_status ON students(placement_status);
+CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON job_postings(company_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_is_active ON job_postings(is_active);
+CREATE INDEX IF NOT EXISTS idx_applications_student_id ON student_applications(student_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job_id ON student_applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON student_applications(application_status);
+CREATE INDEX IF NOT EXISTS idx_interviews_application_id ON interview_rounds(application_id);
+CREATE INDEX IF NOT EXISTS idx_drives_college_id ON campus_drives(college_id);
+CREATE INDEX IF NOT EXISTS idx_drives_company_id ON campus_drives(company_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(company_name);
+CREATE INDEX IF NOT EXISTS idx_placements_student ON placements(student_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_student ON placement_predictions(student_id);
+
+-- Insert default resume templates
+INSERT OR IGNORE INTO resume_templates (template_name, template_description, template_html, category) VALUES
+('Professional', 'Clean and professional resume template for corporate jobs', '<div class="resume-template">Professional Template HTML</div>', 'Professional'),
+('Modern', 'Modern design with accent colors and clean layout', '<div class="resume-template">Modern Template HTML</div>', 'Modern'),
+('Creative', 'Creative design for designers and artists', '<div class="resume-template">Creative Template HTML</div>', 'Creative'),
+('ATS-Friendly', 'Simple format optimized for Applicant Tracking Systems', '<div class="resume-template">ATS Template HTML</div>', 'ATS');
