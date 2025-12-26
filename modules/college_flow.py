@@ -1834,7 +1834,7 @@ class CollegeFlow:
                     for finding in findings:
                         st.write(finding)
     
-    rerun()
+    st.rerun()
 
 def display_workflow_navigation(self, current_step):
     """Display navigation buttons for workflow"""
