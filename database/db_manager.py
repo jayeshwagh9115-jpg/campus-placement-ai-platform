@@ -147,9 +147,30 @@ class DatabaseManager:
             )
             """
         ]
-        
+    
         for sql in tables_sql:
             conn.execute(sql)
+    
+        # Create indexes with IF NOT EXISTS
+        indexes_sql = [
+            "CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_students_department ON students(department)",
+            "CREATE INDEX IF NOT EXISTS idx_students_placement ON students(placement_status)",
+            "CREATE INDEX IF NOT EXISTS idx_jobs_company ON job_postings(company_id)",
+            "CREATE INDEX IF NOT EXISTS idx_jobs_active ON job_postings(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_applications_student ON student_applications(student_id)",
+            "CREATE INDEX IF NOT EXISTS idx_applications_job ON student_applications(job_id)",
+            "CREATE INDEX IF NOT EXISTS idx_applications_status ON student_applications(application_status)",
+            "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
+            "CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)"
+        ]
+    
+        for sql in indexes_sql:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError as e:
+                # Log the error but continue
+                print(f"Note: Could not create index: {e}")
     
     def insert_default_data(self, conn):
         """Insert default/seed data"""
