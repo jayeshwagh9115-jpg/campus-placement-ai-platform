@@ -208,7 +208,7 @@ class CollegeFlow:
     def display(self):
         """Display complete college admin workflow"""
         st.header("🏫 College Placement Management System")
-    
+
         # Get current step from session state
         current_step = st.session_state.get('current_step_college', 1)
         self.current_step = current_step
@@ -1834,20 +1834,20 @@ class CollegeFlow:
                     for finding in findings:
                         st.write(finding)
     
-    def display_workflow_navigation(self, current_step):
-        """Display navigation buttons for workflow"""
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
-                from modules.workflow_manager import WorkflowManager
-                workflow = WorkflowManager()
-                workflow.workflows["college"]["current_step"] = current_step - 1
-                st.rerun()
-        
-        with col3:
-            if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
-                from modules.workflow_manager import WorkflowManager
-                workflow = WorkflowManager()
-                workflow.workflows["college"]["current_step"] = current_step + 1
-                st.rerun()
+    rerun()
+
+def display_workflow_navigation(self, current_step):
+    """Display navigation buttons for workflow"""
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col1:
+        if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
+            # FIX: Directly update session state instead of importing WorkflowManager
+            st.session_state.current_step_college = current_step - 1
+            st.rerun()
+    
+    with col3:
+        if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
+            # FIX: Directly update session state
+            st.session_state.current_step_college = current_step + 1
+            st.rerun()
