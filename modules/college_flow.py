@@ -208,13 +208,12 @@ class CollegeFlow:
     def display(self):
         """Display complete college admin workflow"""
         st.header("🏫 College Placement Management System")
-        
-        # Get current step from workflow manager
-        from modules.workflow_manager import WorkflowManager
-        workflow = WorkflowManager()
-        current_step = workflow.workflows["college"]["current_step"]
-        
-        # Display step header
+    
+        # Get current step from session state
+        current_step = st.session_state.get('current_step_college', 1)
+        self.current_step = current_step
+    
+        # Display step header with better styling
         step_names = {
             1: "👨‍🎓 Student Database",
             2: "📊 Analytics Dashboard",
@@ -226,8 +225,16 @@ class CollegeFlow:
             8: "📈 Performance Reports"
         }
         
-        st.subheader(f"Step {current_step}: {step_names[current_step]}")
-        
+        # Create a nice header with step information
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader(f"Step {current_step}: {step_names[current_step]}")
+        with col2:
+            total_steps = 8
+            progress = current_step / total_steps
+            st.progress(progress)
+            st.caption(f"Step {current_step} of {total_steps}")
+    
         # Display appropriate step
         if current_step == 1:
             self.step1_student_database()
@@ -245,8 +252,9 @@ class CollegeFlow:
             self.step7_placement_records()
         elif current_step == 8:
             self.step8_performance_reports()
-        
-        # Navigation
+    
+        # Navigation buttons at bottom
+        st.divider()
         self.display_workflow_navigation(current_step)
     
     def step1_student_database(self):
