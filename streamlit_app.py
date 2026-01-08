@@ -14,7 +14,7 @@ from modules.student_flow import StudentFlow
 from modules.college_flow import CollegeFlow
 from modules.recruiter_flow import RecruiterFlow
 import streamlit as st
-from recruiter_flow import RecruiterFlow
+from modules.recruiter_flow import RecruiterFlow
 
 # Page configuration
 st.set_page_config(
