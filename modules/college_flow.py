@@ -208,11 +208,11 @@ class CollegeFlow:
     def display(self):
         """Display complete college admin workflow"""
         st.header("🏫 College Placement Management System")
-    
+        
         # Get current step from session state
         current_step = st.session_state.get('current_step_college', 1)
         self.current_step = current_step
-    
+        
         # Display step header
         step_names = {
             1: "👨‍🎓 Student Database",
@@ -224,7 +224,7 @@ class CollegeFlow:
             7: "✅ Placement Records",
             8: "📈 Performance Reports"
         }
-    
+        
         # Create header with progress
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -233,7 +233,7 @@ class CollegeFlow:
             progress = current_step / 8
             st.progress(progress)
             st.caption(f"Step {current_step} of 8")
-    
+        
         # Display appropriate step
         if current_step == 1:
             self.step1_student_database()
@@ -251,7 +251,7 @@ class CollegeFlow:
             self.step7_placement_records()
         elif current_step == 8:
             self.step8_performance_reports()
-    
+        
         # Navigation
         self.display_workflow_navigation(current_step)
     
@@ -614,9 +614,8 @@ class CollegeFlow:
                     with col1:
                         if st.button(f"📅 Schedule Drive", key=f"schedule_{company['company_id']}", width='stretch'):
                             st.session_state.selected_company = company['name']
-                            from modules.workflow_manager import WorkflowManager
-                            workflow = WorkflowManager()
-                            workflow.workflows["college"]["current_step"] = 4
+                            # Set next step to drive scheduling
+                            st.session_state.current_step_college = 4
                             st.rerun()
                     
                     with col2:
@@ -1839,15 +1838,15 @@ class CollegeFlow:
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
-                from modules.workflow_manager import WorkflowManager
-                workflow = WorkflowManager()
-                workflow.workflows["college"]["current_step"] = current_step - 1
-                st.rerun()
+            if current_step > 1:
+                if st.button("⬅️ Previous Step", width='stretch'):
+                    # Update session state directly
+                    st.session_state.current_step_college = current_step - 1
+                    st.rerun()
         
         with col3:
-            if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
-                from modules.workflow_manager import WorkflowManager
-                workflow = WorkflowManager()
-                workflow.workflows["college"]["current_step"] = current_step + 1
-                st.rerun()
+            if current_step < 8:
+                if st.button("Next Step ➡️", width='stretch'):
+                    # Update session state directly
+                    st.session_state.current_step_college = current_step + 1
+                    st.rerun()
