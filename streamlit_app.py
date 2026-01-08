@@ -3,11 +3,11 @@ import pandas as pd
 
 # Try to import database modules with fallbacks
 try:
-    from database.db_manager import DatabaseManager
+    from database.supabase_manager import SupabaseManager
     DB_AVAILABLE = True
 except ImportError as e:
     DB_AVAILABLE = False
-    st.warning(f"Database module not available: {e}")
+    st.warning(f"Supabase module not available: {e}")
 
 from modules.workflow_manager import WorkflowManager
 from modules.student_flow import StudentFlow
@@ -22,7 +22,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state
+# Initialize session state and database
+if 'db_manager' not in st.session_state:
+    if DB_AVAILABLE:
+        try:
+            st.session_state.db_manager = SupabaseManager()
+            st.session_state.demo_mode = not st.session_state.db_manager.is_connected
+        except:
+            st.session_state.demo_mode = True
+    else:
+        st.session_state.demo_mode = True
+
+# Initialize other session state objects
 if 'workflow_manager' not in st.session_state:
     st.session_state.workflow_manager = WorkflowManager()
 
@@ -38,9 +49,6 @@ if 'recruiter_flow' not in st.session_state:
 if 'selected_role' not in st.session_state:
     st.session_state.selected_role = None
 
-if 'demo_mode' not in st.session_state:
-    st.session_state.demo_mode = True  # Default to demo mode
-
 # Title and description
 st.title("🎓 AI-Powered Campus Placement Management System")
 st.markdown("""
@@ -48,6 +56,13 @@ st.markdown("""
 **A Systematic End-to-End Placement Management Platform**
 """)
 
+# Database status
+if st.session_state.demo_mode:
+    st.warning("⚠️ **Running in Demo Mode** - Data is stored in memory only")
+else:
+    st.success("✅ **Connected to Supabase Database**")
+
+# ... rest of your app remains the same ...
 # Show warning if database not available
 if not DB_AVAILABLE:
     st.warning("""
