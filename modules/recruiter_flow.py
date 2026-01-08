@@ -98,59 +98,11 @@ class RecruiterFlow:
             }
         }
     
-    def display(self):
-        """Display recruiter workflow"""
+    def display(self, current_step):
+        """Display recruiter workflow step based on current step"""
         st.header("💼 Recruiter Hiring Platform")
         
-        # Create sidebar navigation for recruiter workflow
-        with st.sidebar:
-            st.subheader("📋 Recruiter Hiring Process")
-            
-            # Define all steps
-            steps = [
-                "🏢 Company Profile",
-                "📋 Job Posting",
-                "🔍 Candidate Search",
-                "🤖 AI Screening",
-                "📅 Interview Scheduling",
-                "⭐ Candidate Evaluation",
-                "📄 Offer Management",
-                "📊 Hiring Analytics"
-            ]
-            
-            # Get current step from URL or session state
-            if 'recruiter_step' not in st.session_state:
-                st.session_state.recruiter_step = 1
-            
-            # Create step selection
-            selected_step = st.radio(
-                "Select Step:",
-                steps,
-                index=st.session_state.recruiter_step - 1
-            )
-            
-            # Update current step based on selection
-            step_index = steps.index(selected_step) + 1
-            st.session_state.recruiter_step = step_index
-            
-            # Display status
-            st.divider()
-            st.caption(f"**Current Step:** {step_index}/8")
-            
-            # Navigation buttons
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("← Previous", disabled=(step_index == 1)):
-                    st.session_state.recruiter_step -= 1
-                    st.rerun()
-            with col2:
-                if st.button("Next →", disabled=(step_index == 8)):
-                    st.session_state.recruiter_step += 1
-                    st.rerun()
-        
         # Display step based on current step
-        current_step = st.session_state.recruiter_step
-        
         if current_step == 1:
             self.step1_company_profile()
         elif current_step == 2:
@@ -1046,5 +998,55 @@ TechCorp Solutions""")
 
 # For testing the module directly
 if __name__ == "__main__":
+    # When running this file directly, create a simple sidebar
+    st.set_page_config(layout="wide", page_title="Recruiter Flow")
+    
+    # Initialize session state
+    if 'recruiter_step' not in st.session_state:
+        st.session_state.recruiter_step = 1
+    
+    # Create sidebar
+    with st.sidebar:
+        st.subheader("📋 Recruiter Hiring Process")
+        
+        # Define all steps
+        steps = [
+            "🏢 Company Profile",
+            "📋 Job Posting",
+            "🔍 Candidate Search",
+            "🤖 AI Screening",
+            "📅 Interview Scheduling",
+            "⭐ Candidate Evaluation",
+            "📄 Offer Management",
+            "📊 Hiring Analytics"
+        ]
+        
+        # Create step selection
+        selected_step = st.radio(
+            "Select Step:",
+            steps,
+            index=st.session_state.recruiter_step - 1
+        )
+        
+        # Update current step based on selection
+        step_index = steps.index(selected_step) + 1
+        st.session_state.recruiter_step = step_index
+        
+        # Display status
+        st.divider()
+        st.caption(f"**Current Step:** {step_index}/8")
+        
+        # Navigation buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous", disabled=(step_index == 1)):
+                st.session_state.recruiter_step -= 1
+                st.rerun()
+        with col2:
+            if st.button("Next →", disabled=(step_index == 8)):
+                st.session_state.recruiter_step += 1
+                st.rerun()
+    
+    # Create recruiter instance and display
     recruiter = RecruiterFlow()
-    recruiter.display()
+    recruiter.display(st.session_state.recruiter_step)
