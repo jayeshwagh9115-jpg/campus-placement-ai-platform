@@ -3,6 +3,7 @@ streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.24.0
 plotly>=5.17.0
+statsmodels>=0.14.0
 
 # Database (remove sqlite3 as it's built-in)
 sqlalchemy>=2.0.0
