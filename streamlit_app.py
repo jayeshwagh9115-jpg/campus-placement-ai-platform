@@ -13,8 +13,6 @@ from modules.workflow_manager import WorkflowManager
 from modules.student_flow import StudentFlow
 from modules.college_flow import CollegeFlow
 from modules.recruiter_flow import RecruiterFlow
-import streamlit as st
-from modules.recruiter_flow import RecruiterFlow
 
 # Page configuration
 st.set_page_config(
@@ -35,7 +33,7 @@ if 'db_manager' not in st.session_state:
     else:
         st.session_state.demo_mode = True
 
-# Initialize other session state objects
+# Initialize all session state objects
 if 'workflow_manager' not in st.session_state:
     st.session_state.workflow_manager = WorkflowManager()
 
@@ -45,12 +43,21 @@ if 'student_flow' not in st.session_state:
 if 'college_flow' not in st.session_state:
     st.session_state.college_flow = CollegeFlow()
 
-# Initialize session state
+if 'recruiter_flow' not in st.session_state:
+    st.session_state.recruiter_flow = RecruiterFlow()
+
+# Initialize session state variables
 if 'recruiter_step' not in st.session_state:
     st.session_state.recruiter_step = 1
     
 if 'selected_role' not in st.session_state:
     st.session_state.selected_role = None
+
+if 'current_step_student' not in st.session_state:
+    st.session_state.current_step_student = 1
+    
+if 'current_step_college' not in st.session_state:
+    st.session_state.current_step_college = 1
 
 # Title and description
 st.title("🎓 AI-Powered Campus Placement Management System")
@@ -65,7 +72,6 @@ if st.session_state.demo_mode:
 else:
     st.success("✅ **Connected to Supabase Database**")
 
-# ... rest of your app remains the same ...
 # Show warning if database not available
 if not DB_AVAILABLE:
     st.warning("""
@@ -94,6 +100,10 @@ with st.sidebar:
     # Store selected role
     if role != st.session_state.get('selected_role'):
         st.session_state.selected_role = role
+        # Reset steps when switching roles
+        st.session_state.recruiter_step = 1
+        st.session_state.current_step_student = 1
+        st.session_state.current_step_college = 1
         st.rerun()
     
     st.divider()
@@ -104,32 +114,98 @@ with st.sidebar:
     elif st.session_state.selected_role == "🏫 College Admin":
         st.session_state.workflow_manager.display_college_workflow()
     elif st.session_state.selected_role == "💼 Recruiter":
-        st.session_state.workflow_manager.display_recruiter_workflow()
+        # Create recruiter sidebar navigation
+        with st.sidebar:
+            st.subheader("📋 Recruiter Hiring Process")
+            
+            # Define all steps
+            steps = [
+                "🏢 Company Profile",
+                "📋 Job Posting",
+                "🔍 Candidate Search",
+                "🤖 AI Screening",
+                "📅 Interview Scheduling",
+                "⭐ Candidate Evaluation",
+                "📄 Offer Management",
+                "📊 Hiring Analytics"
+            ]
+            
+            # Create step selection
+            selected_step = st.radio(
+                "Select Step:",
+                steps,
+                index=st.session_state.recruiter_step - 1,
+                key="recruiter_step_selector"
+            )
+            
+            # Update current step based on selection
+            step_index = steps.index(selected_step) + 1
+            st.session_state.recruiter_step = step_index
+            
+            # Display status
+            st.divider()
+            st.caption(f"**Current Step:** {step_index}/8")
+            
+            # Navigation buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("← Previous", key="recruiter_prev", disabled=(step_index == 1)):
+                    st.session_state.recruiter_step -= 1
+                    st.rerun()
+            with col2:
+                if st.button("Next →", key="recruiter_next", disabled=(step_index == 8)):
+                    st.session_state.recruiter_step += 1
+                    st.rerun()
     else:
         st.session_state.workflow_manager.display_observer_dashboard()
 
 # Main content
-# Create recruiter instance and display
-recruiter = RecruiterFlow()
-recruiter.display(st.session_state.recruiter_step)# In your streamlit_app.py, make sure you're updating session state correctly:
-
-# Main content section - update this part:
 if st.session_state.selected_role == "👨‍🎓 Student":
-    # Get current step from session state, default to 1
-    current_step = st.session_state.get('current_step_student', 1)
+    # Get current step from session state
+    current_step = st.session_state.current_step_student
     st.session_state.student_flow.current_step = current_step
     st.session_state.student_flow.display()
     
 elif st.session_state.selected_role == "🏫 College Admin":
-    # Get current step from session state, default to 1
-    current_step = st.session_state.get('current_step_college', 1)
-    # Update the flow's current step
+    # Get current step from session state
+    current_step = st.session_state.current_step_college
     st.session_state.college_flow.current_step = current_step
-    # Display the flow
     st.session_state.college_flow.display()
     
 elif st.session_state.selected_role == "💼 Recruiter":
-    st.session_state.recruiter_flow.display()
+    # Display recruiter flow with current step
+    st.session_state.recruiter_flow.display(st.session_state.recruiter_step)
+    
+elif st.session_state.selected_role == "👀 Observer":
+    # Display observer dashboard
+    st.header("📊 Observer Dashboard")
+    st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Students", "1,250")
+    with col2:
+        st.metric("Active Jobs", "45")
+    with col3:
+        st.metric("Companies", "32")
+    
+    st.divider()
+    
+    # Recent activities
+    st.subheader("Recent Activities")
+    activities = pd.DataFrame({
+        "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
+        "Activity": [
+            "TechCorp Solutions posted new job: Frontend Developer",
+            "John Doe (Student) applied for Software Engineer position",
+            "IIT Bombay uploaded 250 student records",
+            "5 interviews scheduled for Amazon positions",
+            "Microsoft extended offers to 3 candidates"
+        ],
+        "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
+    })
+    
+    st.dataframe(activities, use_container_width=True, hide_index=True)
 
 # Footer
 st.divider()
