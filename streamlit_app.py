@@ -109,7 +109,9 @@ with st.sidebar:
         st.session_state.workflow_manager.display_observer_dashboard()
 
 # Main content
-# In your streamlit_app.py, make sure you're updating session state correctly:
+# Create recruiter instance and display
+recruiter = RecruiterFlow()
+recruiter.display(st.session_state.recruiter_step)# In your streamlit_app.py, make sure you're updating session state correctly:
 
 # Main content section - update this part:
 if st.session_state.selected_role == "👨‍🎓 Student":
