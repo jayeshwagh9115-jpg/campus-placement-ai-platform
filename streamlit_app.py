@@ -13,6 +13,8 @@ from modules.workflow_manager import WorkflowManager
 from modules.student_flow import StudentFlow
 from modules.college_flow import CollegeFlow
 from modules.recruiter_flow import RecruiterFlow
+import streamlit as st
+from recruiter_flow import RecruiterFlow
 
 # Page configuration
 st.set_page_config(
@@ -43,9 +45,10 @@ if 'student_flow' not in st.session_state:
 if 'college_flow' not in st.session_state:
     st.session_state.college_flow = CollegeFlow()
 
-if 'recruiter_flow' not in st.session_state:
-    st.session_state.recruiter_flow = RecruiterFlow()
-
+# Initialize session state
+if 'recruiter_step' not in st.session_state:
+    st.session_state.recruiter_step = 1
+    
 if 'selected_role' not in st.session_state:
     st.session_state.selected_role = None
 
