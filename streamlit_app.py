@@ -106,21 +106,25 @@ with st.sidebar:
         st.session_state.workflow_manager.display_observer_dashboard()
 
 # Main content
+# In your streamlit_app.py, make sure you're updating session state correctly:
+
+# Main content section - update this part:
 if st.session_state.selected_role == "👨‍🎓 Student":
+    # Get current step from session state, default to 1
     current_step = st.session_state.get('current_step_student', 1)
     st.session_state.student_flow.current_step = current_step
     st.session_state.student_flow.display()
     
 elif st.session_state.selected_role == "🏫 College Admin":
+    # Get current step from session state, default to 1
     current_step = st.session_state.get('current_step_college', 1)
+    # Update the flow's current step
     st.session_state.college_flow.current_step = current_step
+    # Display the flow
     st.session_state.college_flow.display()
     
 elif st.session_state.selected_role == "💼 Recruiter":
     st.session_state.recruiter_flow.display()
-    
-else:
-    st.session_state.workflow_manager.display_observer_view()
 
 # Footer
 st.divider()
