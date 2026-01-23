@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
-from database.db_manager import db_manager
+from typing import List, Dict, Optional
 
 class CollegeFlow:
     def __init__(self):
@@ -15,17 +15,150 @@ class CollegeFlow:
     def initialize_college_data(self):
         """Initialize college data"""
         return {
-            "college_id": 1,  # Default college ID
             "college_name": "ABC Engineering College",
-            "students": self.generate_sample_students(),
-            "companies": self.generate_sample_companies(),
-            "drives": self.generate_sample_drives(),
-            "placements": self.generate_sample_placements(),
-            "interviews": self.generate_sample_interviews()
+            "college_id": None,
+            "students": pd.DataFrame(),
+            "companies": pd.DataFrame(),
+            "drives": pd.DataFrame(),
+            "placements": pd.DataFrame(),
+            "interviews": pd.DataFrame()
         }
     
+    # ==================== DATABASE METHODS ====================
+    
+    def get_from_database(self, data_type: str, college_id: str = None) -> pd.DataFrame:
+        """Get data from database"""
+        if st.session_state.demo_mode:
+            return pd.DataFrame()  # Will use sample data in demo mode
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return pd.DataFrame()
+        
+        try:
+            if data_type == 'students':
+                if college_id:
+                    data = db.get_students(college_id=college_id)
+                else:
+                    data = db.get_students()
+                return pd.DataFrame(data) if data else pd.DataFrame()
+            
+            elif data_type == 'companies':
+                data = db.get_companies()
+                return pd.DataFrame(data) if data else pd.DataFrame()
+            
+            elif data_type == 'jobs':
+                data = db.get_jobs()
+                return pd.DataFrame(data) if data else pd.DataFrame()
+            
+            elif data_type == 'applications':
+                data = db.get_applications()
+                return pd.DataFrame(data) if data else pd.DataFrame()
+            
+            elif data_type == 'colleges':
+                data = db.get_colleges()
+                return pd.DataFrame(data) if data else pd.DataFrame()
+            
+        except Exception as e:
+            st.error(f"Database error fetching {data_type}: {e}")
+        
+        return pd.DataFrame()
+    
+    def save_to_database(self, data_type: str, data: Dict) -> bool:
+        """Save data to database"""
+        if st.session_state.demo_mode:
+            return True  # Return success in demo mode
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return False
+        
+        try:
+            if data_type == 'student':
+                result = db.create_student(data)
+            elif data_type == 'company':
+                result = db.insert('companies', data)
+            elif data_type == 'college':
+                result = db.create_college(data)
+            elif data_type == 'job':
+                result = db.create_job(data)
+            elif data_type == 'application':
+                result = db.create_application(data)
+            else:
+                return False
+            
+            return result is not None
+            
+        except Exception as e:
+            st.error(f"Database error saving {data_type}: {e}")
+            return False
+    
+    def get_current_college_id(self) -> Optional[str]:
+        """Get current college ID from session or database"""
+        # Try to get from session state first
+        college_id = st.session_state.get('current_college_id')
+        
+        if college_id:
+            return college_id
+        
+        # If not in session, try to get from database using college email
+        if 'college_email' in st.session_state:
+            db = st.session_state.get('db_manager')
+            if db and db.is_connected:
+                colleges = db.get_colleges()
+                college = next((c for c in colleges if c.get('email') == st.session_state.college_email), None)
+                if college:
+                    st.session_state.current_college_id = college.get('id')
+                    return college.get('id')
+        
+        return None
+    
+    def load_college_data(self):
+        """Load all college-related data from database"""
+        if st.session_state.demo_mode:
+            # Load sample data for demo mode
+            self.load_sample_data()
+            return
+        
+        college_id = self.get_current_college_id()
+        
+        if not college_id:
+            st.warning("College ID not found. Running in demo mode.")
+            self.load_sample_data()
+            return
+        
+        # Load real data from database
+        with st.spinner("Loading college data..."):
+            # Students
+            students_data = self.get_from_database('students', college_id)
+            if not students_data.empty:
+                self.college_data["students"] = students_data
+            else:
+                st.info("No students found in database. Using sample data.")
+                self.college_data["students"] = self.generate_sample_students()
+            
+            # Companies
+            companies_data = self.get_from_database('companies')
+            if not companies_data.empty:
+                self.college_data["companies"] = companies_data
+            else:
+                self.college_data["companies"] = self.generate_sample_companies()
+            
+            # Load other data (you can add database methods for these)
+            self.college_data["drives"] = self.generate_sample_drives()
+            self.college_data["placements"] = self.generate_sample_placements()
+            self.college_data["interviews"] = self.generate_sample_interviews()
+    
+    def load_sample_data(self):
+        """Load sample data for demo mode"""
+        self.college_data["students"] = self.generate_sample_students()
+        self.college_data["companies"] = self.generate_sample_companies()
+        self.college_data["drives"] = self.generate_sample_drives()
+        self.college_data["placements"] = self.generate_sample_placements()
+        self.college_data["interviews"] = self.generate_sample_interviews()
+    
     def generate_sample_students(self):
-        """Generate sample student data"""
+        """Generate sample student data for demo mode"""
         np.random.seed(42)
         n_students = 150
         
@@ -39,8 +172,8 @@ class CollegeFlow:
             grad_year = years[i % len(years)]
             
             student = {
-                "student_id": f"S{i+1:04d}",
-                "name": f"Student {i+1}",
+                "id": f"S{i+1:04d}",
+                "full_name": f"Student {i+1}",
                 "department": dept,
                 "semester": np.random.randint(3, 9),
                 "cgpa": round(6.5 + np.random.random() * 3, 2),
@@ -64,70 +197,65 @@ class CollegeFlow:
         return pd.DataFrame(data)
     
     def generate_sample_companies(self):
-        """Generate sample company data"""
+        """Generate sample company data for demo mode"""
         companies = [
             {
-                "company_id": "C001",
+                "id": "C001",
                 "name": "Google",
                 "industry": "Technology",
                 "website": "https://google.com",
                 "contact_person": "John Doe",
-                "contact_email": "campus@google.com",
-                "contact_phone": "+1-650-253-0000",
-                "recruitment_status": "Active",
-                "visits_this_year": 3,
+                "email": "campus@google.com",
+                "phone": "+1-650-253-0000",
+                "status": "Active",
                 "total_hires": 25,
                 "avg_package": 22.5
             },
             {
-                "company_id": "C002",
+                "id": "C002",
                 "name": "Microsoft",
                 "industry": "Software",
                 "website": "https://microsoft.com",
                 "contact_person": "Jane Smith",
-                "contact_email": "university@microsoft.com",
-                "contact_phone": "+1-425-882-8080",
-                "recruitment_status": "Active",
-                "visits_this_year": 2,
+                "email": "university@microsoft.com",
+                "phone": "+1-425-882-8080",
+                "status": "Active",
                 "total_hires": 18,
                 "avg_package": 20.0
             },
             {
-                "company_id": "C003",
+                "id": "C003",
                 "name": "Amazon",
                 "industry": "E-commerce",
                 "website": "https://amazon.com",
                 "contact_person": "Bob Johnson",
-                "contact_email": "campus@amazon.com",
-                "contact_phone": "+1-206-266-1000",
-                "recruitment_status": "Active",
-                "visits_this_year": 2,
+                "email": "campus@amazon.com",
+                "phone": "+1-206-266-1000",
+                "status": "Active",
                 "total_hires": 15,
                 "avg_package": 18.5
             },
             {
-                "company_id": "C004",
+                "id": "C004",
                 "name": "TCS",
                 "industry": "IT Services",
                 "website": "https://tcs.com",
                 "contact_person": "Alice Brown",
-                "contact_email": "campus@tcs.com",
-                "contact_phone": "+91-22-6778-9999",
-                "recruitment_status": "Active",
-                "visits_this_year": 4,
+                "email": "campus@tcs.com",
+                "phone": "+91-22-6778-9999",
+                "status": "Active",
                 "total_hires": 45,
                 "avg_package": 8.5
             },
             {
-                "company_id": "C005",
+                "id": "C005",
                 "name": "Infosys",
                 "industry": "IT Services",
                 "website": "https://infosys.com",
                 "contact_person": "Charlie Wilson",
-                "contact_email": "campus@infosys.com",
-                "contact_phone": "+91-80-2852-0261",
-                "recruitment_status": "Active",
-                "visits_this_year": 3,
+                "email": "campus@infosys.com",
+                "phone": "+91-80-2852-0261",
+                "status": "Active",
                 "total_hires": 38,
                 "avg_package": 8.0
             }
@@ -135,7 +263,7 @@ class CollegeFlow:
         return pd.DataFrame(companies)
     
     def generate_sample_drives(self):
-        """Generate sample campus drives"""
+        """Generate sample campus drives for demo mode"""
         drives = []
         companies = ["Google", "Microsoft", "Amazon", "TCS", "Infosys"]
         
@@ -159,7 +287,7 @@ class CollegeFlow:
         return pd.DataFrame(drives)
     
     def generate_sample_placements(self):
-        """Generate sample placement records"""
+        """Generate sample placement records for demo mode"""
         placements = []
         companies = ["Google", "Microsoft", "Amazon", "TCS", "Infosys", 
                     "Adobe", "Intel", "Oracle", "Cisco", "IBM"]
@@ -182,7 +310,7 @@ class CollegeFlow:
         return pd.DataFrame(placements)
     
     def generate_sample_interviews(self):
-        """Generate sample interview records"""
+        """Generate sample interview records for demo mode"""
         interviews = []
         rounds = ["Aptitude Test", "Technical Round 1", "Technical Round 2", "HR Round", "Managerial Round"]
         
@@ -235,6 +363,16 @@ class CollegeFlow:
             st.progress(progress)
             st.caption(f"Step {current_step} of 8")
         
+        # Database status indicator
+        if not st.session_state.demo_mode and st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+            st.success("✅ Connected to Live Database")
+            # Load data from database
+            self.load_college_data()
+        else:
+            st.warning("⚠️ Running in Demo Mode")
+            # Load sample data for demo
+            self.load_sample_data()
+        
         # Display appropriate step
         if current_step == 1:
             self.step1_student_database()
@@ -260,6 +398,12 @@ class CollegeFlow:
         """Step 1: Student Database Management"""
         st.info("Manage and view all student records in the college")
         
+        # Database info
+        if not st.session_state.demo_mode:
+            college_id = self.get_current_college_id()
+            if college_id:
+                st.info(f"📋 College ID: {college_id}")
+        
         col1, col2 = st.columns([1, 3])
         
         with col1:
@@ -269,7 +413,7 @@ class CollegeFlow:
             st.write("### Filters")
             department_filter = st.multiselect(
                 "Select Department",
-                options=self.college_data["students"]["department"].unique(),
+                options=self.college_data["students"]["department"].unique() if not self.college_data["students"].empty else [],
                 default=[]
             )
             
@@ -289,18 +433,48 @@ class CollegeFlow:
             # Add new student form
             st.write("### Add New Student")
             with st.form("add_student_form"):
-                new_name = st.text_input("Name")
-                new_dept = st.selectbox("Department", 
-                                      options=self.college_data["students"]["department"].unique())
-                new_cgpa = st.number_input("CGPA", min_value=0.0, max_value=10.0, value=7.5)
-                new_year = st.selectbox("Graduation Year", options=[2023, 2024, 2025])
+                new_name = st.text_input("Full Name*")
+                new_email = st.text_input("Email*")
+                new_roll = st.text_input("Roll Number*")
+                new_dept = st.selectbox("Department*", 
+                                      options=self.college_data["students"]["department"].unique() if not self.college_data["students"].empty else ["Computer Science"])
+                new_cgpa = st.number_input("CGPA*", min_value=0.0, max_value=10.0, value=7.5)
+                new_year = st.selectbox("Graduation Year*", options=[2023, 2024, 2025])
                 
-                if st.form_submit_button("Add Student"):
-                    # Add student logic here
-                    st.success(f"Added student: {new_name}")
+                submit = st.form_submit_button("Add Student")
+                
+                if submit:
+                    if new_name and new_email and new_roll and new_dept:
+                        student_data = {
+                            "full_name": new_name,
+                            "email": new_email,
+                            "roll_number": new_roll,
+                            "department": new_dept,
+                            "cgpa": float(new_cgpa),
+                            "graduation_year": new_year,
+                            "college_id": self.get_current_college_id() if not st.session_state.demo_mode else None,
+                            "created_at": datetime.now().isoformat()
+                        }
+                        
+                        success = self.save_to_database('student', student_data)
+                        
+                        if success or st.session_state.demo_mode:
+                            st.success(f"✅ Added student: {new_name}")
+                            if not st.session_state.demo_mode:
+                                st.success("✅ Student saved to database!")
+                                # Refresh data
+                                self.load_college_data()
+                        else:
+                            st.error("❌ Failed to save student to database")
+                    else:
+                        st.error("Please fill all required fields (*)")
         
         with col2:
             st.subheader("👥 Student Database")
+            
+            if self.college_data["students"].empty:
+                st.info("No student data available")
+                return
             
             # Apply filters
             filtered_students = self.college_data["students"].copy()
@@ -321,17 +495,19 @@ class CollegeFlow:
                 placed_count = len(filtered_students[filtered_students["placement_status"] == "Placed"])
                 st.metric("Placed", placed_count)
             with col_stats3:
-                avg_cgpa = filtered_students["cgpa"].mean()
+                avg_cgpa = filtered_students["cgpa"].mean() if not filtered_students.empty else 0
                 st.metric("Avg CGPA", f"{avg_cgpa:.2f}")
             with col_stats4:
                 internships = len(filtered_students[filtered_students["placement_status"] == "Intern"])
                 st.metric("Internships", internships)
             
             # Display data table
+            display_cols = ["id", "full_name", "department", "cgpa", "placement_status", "company", "package"]
+            # Use available columns
+            available_cols = [col for col in display_cols if col in filtered_students.columns]
+            
             st.dataframe(
-                filtered_students[
-                    ["student_id", "name", "department", "cgpa", "placement_status", "company", "package"]
-                ].sort_values("cgpa", ascending=False),
+                filtered_students[available_cols].sort_values("cgpa", ascending=False),
                 use_container_width=True,
                 height=400
             )
@@ -350,6 +526,10 @@ class CollegeFlow:
         """Step 2: Analytics Dashboard"""
         st.info("Comprehensive analytics and insights on placement performance")
         
+        if self.college_data["students"].empty:
+            st.warning("No student data available for analytics")
+            return
+        
         # Overall statistics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -357,10 +537,11 @@ class CollegeFlow:
             st.metric("Total Students", total_students)
         with col2:
             placed_students = len(self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"])
-            placement_rate = (placed_students / total_students) * 100
+            placement_rate = (placed_students / total_students) * 100 if total_students > 0 else 0
             st.metric("Placement Rate", f"{placement_rate:.1f}%")
         with col3:
-            avg_package = self.college_data["students"]["package"].mean()
+            placed_df = self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"]
+            avg_package = placed_df["package"].mean() if not placed_df.empty else 0
             st.metric("Avg Package (LPA)", f"{avg_package:.2f}" if not pd.isna(avg_package) else "N/A")
         with col4:
             active_companies = len(self.college_data["companies"])
@@ -373,83 +554,52 @@ class CollegeFlow:
             st.subheader("📈 Placement by Department")
             
             # Department-wise placement data
-            dept_data = self.college_data["students"].groupby("department").agg({
-                "student_id": "count",
-                "placement_status": lambda x: (x == "Placed").sum()
-            }).reset_index()
-            dept_data["placement_rate"] = (dept_data["placement_status"] / dept_data["student_id"]) * 100
-            
-            fig1 = px.bar(
-                dept_data,
-                x="department",
-                y="placement_rate",
-                color="department",
-                title="Placement Rate by Department",
-                labels={"department": "Department", "placement_rate": "Placement Rate (%)"}
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            if not self.college_data["students"].empty:
+                dept_data = self.college_data["students"].groupby("department").agg({
+                    "id": "count",
+                    "placement_status": lambda x: (x == "Placed").sum()
+                }).reset_index()
+                dept_data["placement_rate"] = (dept_data["placement_status"] / dept_data["id"]) * 100
+                
+                fig1 = px.bar(
+                    dept_data,
+                    x="department",
+                    y="placement_rate",
+                    color="department",
+                    title="Placement Rate by Department",
+                    labels={"department": "Department", "placement_rate": "Placement Rate (%)"}
+                )
+                st.plotly_chart(fig1, use_container_width=True)
         
         with col_chart2:
             st.subheader("🏢 Top Hiring Companies")
             
             # Company-wise hiring data
-            company_counts = self.college_data["students"]["company"].value_counts().head(10)
-            
-            fig2 = px.pie(
-                values=company_counts.values,
-                names=company_counts.index,
-                title="Top 10 Hiring Companies",
-                hole=0.4
-            )
-            st.plotly_chart(fig2, use_container_width=True)
+            if not self.college_data["students"].empty:
+                company_counts = self.college_data["students"]["company"].value_counts().head(10)
+                
+                if not company_counts.empty:
+                    fig2 = px.pie(
+                        values=company_counts.values,
+                        names=company_counts.index,
+                        title="Top 10 Hiring Companies",
+                        hole=0.4
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info("No company hiring data available")
         
         # CGPA Distribution
         st.subheader("📊 CGPA Distribution")
-        fig3 = px.histogram(
-            self.college_data["students"],
-            x="cgpa",
-            nbins=20,
-            title="CGPA Distribution of Students",
-            labels={"cgpa": "CGPA", "count": "Number of Students"}
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-        
-        # Year-wise Trends
-        st.subheader("📅 Year-wise Placement Trends")
-        
-        # Create sample trend data
-        years = [2020, 2021, 2022, 2023]
-        trend_data = pd.DataFrame({
-            "Year": years,
-            "Placement Rate": [65, 72, 78, 82],
-            "Avg Package": [12.5, 14.2, 16.8, 18.5],
-            "Total Offers": [120, 145, 165, 190]
-        })
-        
-        fig4 = go.Figure()
-        fig4.add_trace(go.Scatter(
-            x=trend_data["Year"],
-            y=trend_data["Placement Rate"],
-            mode="lines+markers",
-            name="Placement Rate (%)",
-            yaxis="y"
-        ))
-        fig4.add_trace(go.Bar(
-            x=trend_data["Year"],
-            y=trend_data["Total Offers"],
-            name="Total Offers",
-            yaxis="y2"
-        ))
-        
-        fig4.update_layout(
-            title="Placement Trends Over Years",
-            xaxis=dict(title="Year"),
-            yaxis=dict(title="Placement Rate (%)", side="left"),
-            yaxis2=dict(title="Total Offers", side="right", overlaying="y"),
-            legend=dict(x=0.1, y=1.1, orientation="h")
-        )
-        
-        st.plotly_chart(fig4, use_container_width=True)
+        if not self.college_data["students"].empty:
+            fig3 = px.histogram(
+                self.college_data["students"],
+                x="cgpa",
+                nbins=20,
+                title="CGPA Distribution of Students",
+                labels={"cgpa": "CGPA", "count": "Number of Students"}
+            )
+            st.plotly_chart(fig3, use_container_width=True)
     
     def step3_company_registration(self):
         """Step 3: Company Registration & Management"""
@@ -474,27 +624,52 @@ class CollegeFlow:
                 st.write("### Recruitment Requirements")
                 min_cgpa = st.slider("Minimum CGPA", 0.0, 10.0, 7.0, 0.5)
                 max_backlogs = st.number_input("Maximum Backlogs Allowed", 0, 10, 0)
-                preferred_departments = st.multiselect(
-                    "Preferred Departments",
-                    options=self.college_data["students"]["department"].unique(),
-                    default=self.college_data["students"]["department"].unique()
-                )
                 
                 submit = st.form_submit_button("Register Company")
                 
                 if submit:
                     if company_name and contact_person and contact_email:
-                        # Add company logic here
-                        st.success(f"Successfully registered {company_name}")
+                        company_data = {
+                            "name": company_name,
+                            "industry": industry,
+                            "website": website,
+                            "contact_person": contact_person,
+                            "email": contact_email,
+                            "phone": contact_phone,
+                            "min_cgpa": float(min_cgpa),
+                            "max_backlogs": max_backlogs,
+                            "status": "Active",
+                            "created_at": datetime.now().isoformat()
+                        }
+                        
+                        success = self.save_to_database('company', company_data)
+                        
+                        if success or st.session_state.demo_mode:
+                            st.success(f"✅ Successfully registered {company_name}")
+                            if not st.session_state.demo_mode:
+                                st.success("✅ Company saved to database!")
+                                # Refresh data
+                                companies_data = self.get_from_database('companies')
+                                if not companies_data.empty:
+                                    self.college_data["companies"] = companies_data
+                        else:
+                            st.error("❌ Failed to register company")
                     else:
                         st.error("Please fill all required fields (*)")
         
         with col2:
             st.subheader("📋 Registered Companies")
             
+            if self.college_data["companies"].empty:
+                st.info("No companies registered yet")
+                return
+            
             # Display companies table
+            display_cols = ["name", "industry", "contact_person", "email", "phone", "status", "total_hires", "avg_package"]
+            available_cols = [col for col in display_cols if col in self.college_data["companies"].columns]
+            
             st.dataframe(
-                self.college_data["companies"],
+                self.college_data["companies"][available_cols],
                 use_container_width=True,
                 height=400
             )
@@ -507,35 +682,14 @@ class CollegeFlow:
                 active_companies = len(self.college_data["companies"])
                 st.metric("Active Companies", active_companies)
             with col_stats2:
-                total_hires = self.college_data["companies"]["total_hires"].sum()
+                total_hires = self.college_data["companies"]["total_hires"].sum() if "total_hires" in self.college_data["companies"].columns else 0
                 st.metric("Total Hires", total_hires)
             with col_stats3:
-                avg_package = self.college_data["companies"]["avg_package"].mean()
-                st.metric("Avg Package", f"{avg_package:.1f} LPA")
-            
-            # Top companies visualization
-            st.write("### Top Hiring Companies")
-            top_companies = self.college_data["companies"].nlargest(5, "total_hires")
-            
-            fig = px.bar(
-                top_companies,
-                x="name",
-                y="total_hires",
-                color="avg_package",
-                title="Top Companies by Number of Hires",
-                labels={"name": "Company", "total_hires": "Total Hires", "avg_package": "Avg Package (LPA)"}
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Export option
-            if st.button("📥 Export Company Data"):
-                csv = self.college_data["companies"].to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name="company_database.csv",
-                    mime="text/csv"
-                )
+                if "avg_package" in self.college_data["companies"].columns:
+                    avg_package = self.college_data["companies"]["avg_package"].mean()
+                    st.metric("Avg Package", f"{avg_package:.1f} LPA")
+                else:
+                    st.metric("Avg Package", "N/A")
     
     def step4_drive_scheduling(self):
         """Step 4: Campus Drive Scheduling"""
@@ -546,10 +700,15 @@ class CollegeFlow:
         with col1:
             st.subheader("📅 Schedule New Drive")
             
+            # Get companies from database
+            companies = []
+            if not self.college_data["companies"].empty:
+                companies = self.college_data["companies"]["name"].tolist()
+            
             with st.form("schedule_drive_form"):
                 company = st.selectbox(
                     "Select Company *",
-                    options=self.college_data["companies"]["name"].tolist()
+                    options=companies if companies else ["Google", "Microsoft", "Amazon"]
                 )
                 drive_date = st.date_input("Drive Date *", min_value=datetime.now().date())
                 drive_time = st.time_input("Drive Time", value=datetime.strptime("10:00", "%H:%M").time())
@@ -567,8 +726,10 @@ class CollegeFlow:
                 
                 if submit:
                     if company and coordinator and job_roles:
-                        # Schedule drive logic here
-                        st.success(f"Drive scheduled for {company} on {drive_date}")
+                        # In a real app, you would save this to a 'drives' table
+                        st.success(f"✅ Drive scheduled for {company} on {drive_date}")
+                        if not st.session_state.demo_mode:
+                            st.info("Note: Drive scheduling database integration would be implemented here")
                     else:
                         st.error("Please fill all required fields (*)")
         
@@ -576,20 +737,23 @@ class CollegeFlow:
             st.subheader("📋 Upcoming Drives")
             
             # Display drives
-            drives_df = self.college_data["drives"].copy()
-            drives_df["date"] = pd.to_datetime(drives_df["date"])
-            upcoming_drives = drives_df[drives_df["date"] >= pd.Timestamp.now()]
-            
-            if not upcoming_drives.empty:
-                st.dataframe(
-                    upcoming_drives[
-                        ["company", "date", "mode", "venue", "coordinator", "status", "registered"]
-                    ],
-                    use_container_width=True,
-                    height=300
-                )
+            if not self.college_data["drives"].empty:
+                drives_df = self.college_data["drives"].copy()
+                drives_df["date"] = pd.to_datetime(drives_df["date"])
+                upcoming_drives = drives_df[drives_df["date"] >= pd.Timestamp.now()]
+                
+                if not upcoming_drives.empty:
+                    st.dataframe(
+                        upcoming_drives[
+                            ["company", "date", "mode", "venue", "coordinator", "status", "registered"]
+                        ],
+                        use_container_width=True,
+                        height=300
+                    )
+                else:
+                    st.info("No upcoming drives scheduled")
             else:
-                st.info("No upcoming drives scheduled")
+                st.info("No drive data available")
             
             st.subheader("📊 Drive Statistics")
             
@@ -598,44 +762,27 @@ class CollegeFlow:
                 total_drives = len(self.college_data["drives"])
                 st.metric("Total Drives", total_drives)
             with col_stats2:
-                upcoming = len(upcoming_drives)
-                st.metric("Upcoming", upcoming)
+                if not self.college_data["drives"].empty:
+                    drives_df = self.college_data["drives"].copy()
+                    drives_df["date"] = pd.to_datetime(drives_df["date"])
+                    upcoming = len(drives_df[drives_df["date"] >= pd.Timestamp.now()])
+                    st.metric("Upcoming", upcoming)
+                else:
+                    st.metric("Upcoming", 0)
             with col_stats3:
-                completed = len(drives_df[drives_df["status"] == "Completed"])
-                st.metric("Completed", completed)
-            
-            # Drive calendar view
-            st.subheader("🗓️ Drive Calendar")
-            
-            # Create a simple calendar display
-            calendar_data = []
-            for _, drive in self.college_data["drives"].iterrows():
-                calendar_data.append({
-                    "Company": drive["company"],
-                    "Date": drive["date"],
-                    "Mode": drive["mode"],
-                    "Status": drive["status"]
-                })
-            
-            calendar_df = pd.DataFrame(calendar_data)
-            calendar_df["Date"] = pd.to_datetime(calendar_df["Date"])
-            calendar_df = calendar_df.sort_values("Date")
-            
-            # Display as timeline
-            fig = px.timeline(
-                calendar_df,
-                x_start="Date",
-                x_end="Date",
-                y="Company",
-                color="Status",
-                title="Campus Drive Timeline",
-                labels={"Date": "Date", "Company": "Company"}
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                if not self.college_data["drives"].empty:
+                    completed = len(self.college_data["drives"][self.college_data["drives"]["status"] == "Completed"])
+                    st.metric("Completed", completed)
+                else:
+                    st.metric("Completed", 0)
     
     def step5_student_company_matching(self):
         """Step 5: Student-Company Matching"""
         st.info("Match students with suitable companies based on criteria")
+        
+        if self.college_data["students"].empty or self.college_data["companies"].empty:
+            st.warning("Student or company data not available")
+            return
         
         col1, col2 = st.columns(2)
         
@@ -668,9 +815,11 @@ class CollegeFlow:
                 matched_students = matched_students[
                     (matched_students["cgpa"] >= company_requirements["min_cgpa"]) &
                     (matched_students["backlogs"] <= company_requirements["max_backlogs"]) &
-                    (matched_students["department"].isin(company_requirements["preferred_departments"])) &
-                    (matched_students["placement_status"] == "Not Placed")
+                    (matched_students["department"].isin(company_requirements["preferred_departments"]))
                 ]
+                
+                if "placement_status" in matched_students.columns:
+                    matched_students = matched_students[matched_students["placement_status"] == "Not Placed"]
                 
                 st.metric("Matching Students", len(matched_students))
         
@@ -679,10 +828,11 @@ class CollegeFlow:
             
             if 'matched_students' in locals() and not matched_students.empty:
                 # Display matched students
+                display_cols = ["id", "full_name", "department", "cgpa", "backlogs", "email"]
+                available_cols = [col for col in display_cols if col in matched_students.columns]
+                
                 st.dataframe(
-                    matched_students[
-                        ["student_id", "name", "department", "cgpa", "backlogs", "email"]
-                    ].sort_values("cgpa", ascending=False),
+                    matched_students[available_cols].sort_values("cgpa", ascending=False),
                     use_container_width=True,
                     height=400
                 )
@@ -692,55 +842,16 @@ class CollegeFlow:
                 
                 col_stats1, col_stats2, col_stats3 = st.columns(3)
                 with col_stats1:
-                    avg_cgpa = matched_students["cgpa"].mean()
+                    avg_cgpa = matched_students["cgpa"].mean() if not matched_students.empty else 0
                     st.metric("Avg CGPA", f"{avg_cgpa:.2f}")
                 with col_stats2:
                     total_students = len(matched_students)
                     st.metric("Total Matched", total_students)
                 with col_stats3:
-                    top_dept = matched_students["department"].mode()[0]
+                    top_dept = matched_students["department"].mode()[0] if not matched_students.empty else "N/A"
                     st.metric("Top Department", top_dept)
-                
-                # Send notification option
-                if st.button("📧 Notify Matched Students"):
-                    st.success(f"Notification sent to {len(matched_students)} students about {selected_company} drive")
             else:
                 st.info("Select a company to see matching students")
-        
-        # Automated matching for all companies
-        st.subheader("🤖 Automated Matching Report")
-        
-        # Generate matching report for all companies
-        if st.button("Generate Matching Report"):
-            matching_report = []
-            
-            for _, company in self.college_data["companies"].iterrows():
-                # Simulate matching for each company
-                matched = self.college_data["students"][
-                    (self.college_data["students"]["cgpa"] >= 7.0) &
-                    (self.college_data["students"]["placement_status"] == "Not Placed")
-                ].head(np.random.randint(5, 20))
-                
-                matching_report.append({
-                    "Company": company["name"],
-                    "Matched Students": len(matched),
-                    "Avg CGPA": matched["cgpa"].mean() if not matched.empty else 0,
-                    "Top Department": matched["department"].mode()[0] if not matched.empty else "N/A"
-                })
-            
-            report_df = pd.DataFrame(matching_report)
-            st.dataframe(report_df, use_container_width=True)
-            
-            # Visualize matching
-            fig = px.bar(
-                report_df,
-                x="Company",
-                y="Matched Students",
-                color="Avg CGPA",
-                title="Student-Company Matching Overview",
-                labels={"Company": "Company", "Matched Students": "Number of Matched Students"}
-            )
-            st.plotly_chart(fig, use_container_width=True)
     
     def step6_interview_management(self):
         """Step 6: Interview Management"""
@@ -751,14 +862,23 @@ class CollegeFlow:
         with col1:
             st.subheader("📝 Schedule Interview")
             
+            # Get data for dropdowns
+            student_ids = []
+            if not self.college_data["students"].empty:
+                student_ids = self.college_data["students"]["id"].tolist()
+            
+            companies = []
+            if not self.college_data["companies"].empty:
+                companies = self.college_data["companies"]["name"].tolist()
+            
             with st.form("schedule_interview_form"):
                 student_id = st.selectbox(
                     "Select Student *",
-                    options=self.college_data["students"]["student_id"].tolist()
+                    options=student_ids if student_ids else ["S0001", "S0002", "S0003"]
                 )
                 company = st.selectbox(
                     "Company *",
-                    options=self.college_data["companies"]["name"].tolist()
+                    options=companies if companies else ["Google", "Microsoft", "Amazon"]
                 )
                 interview_round = st.selectbox(
                     "Interview Round *",
@@ -773,8 +893,10 @@ class CollegeFlow:
                 
                 if submit:
                     if student_id and company and interview_round:
-                        # Schedule interview logic here
-                        st.success(f"Interview scheduled for {student_id} with {company}")
+                        # In a real app, you would save this to an 'interviews' table
+                        st.success(f"✅ Interview scheduled for {student_id} with {company}")
+                        if not st.session_state.demo_mode:
+                            st.info("Note: Interview scheduling database integration would be implemented here")
                     else:
                         st.error("Please fill all required fields (*)")
         
@@ -782,99 +904,32 @@ class CollegeFlow:
             st.subheader("📋 Interview Schedule")
             
             # Display interviews
-            interviews_df = self.college_data["interviews"].copy()
-            interviews_df["datetime"] = pd.to_datetime(interviews_df["date"] + " " + interviews_df["time"])
-            upcoming_interviews = interviews_df[interviews_df["datetime"] >= pd.Timestamp.now()]
-            
-            if not upcoming_interviews.empty:
-                st.dataframe(
-                    upcoming_interviews[
-                        ["student_id", "student_name", "company", "round", "date", "time", "mode", "status"]
-                    ],
-                    use_container_width=True,
-                    height=300
-                )
+            if not self.college_data["interviews"].empty:
+                interviews_df = self.college_data["interviews"].copy()
+                interviews_df["datetime"] = pd.to_datetime(interviews_df["date"] + " " + interviews_df["time"])
+                upcoming_interviews = interviews_df[interviews_df["datetime"] >= pd.Timestamp.now()]
+                
+                if not upcoming_interviews.empty:
+                    display_cols = ["student_id", "student_name", "company", "round", "date", "time", "mode", "status"]
+                    available_cols = [col for col in display_cols if col in upcoming_interviews.columns]
+                    
+                    st.dataframe(
+                        upcoming_interviews[available_cols],
+                        use_container_width=True,
+                        height=300
+                    )
+                else:
+                    st.info("No upcoming interviews scheduled")
             else:
-                st.info("No upcoming interviews scheduled")
-            
-            st.subheader("📊 Interview Statistics")
-            
-            col_stats1, col_stats2, col_stats3 = st.columns(3)
-            with col_stats1:
-                total_interviews = len(interviews_df)
-                st.metric("Total Interviews", total_interviews)
-            with col_stats2:
-                scheduled = len(interviews_df[interviews_df["status"] == "Scheduled"])
-                st.metric("Scheduled", scheduled)
-            with col_stats3:
-                completed = len(interviews_df[interviews_df["status"] == "Completed"])
-                st.metric("Completed", completed)
-            
-            # Interview results
-            st.subheader("📈 Interview Results")
-            
-            if not interviews_df.empty:
-                result_counts = interviews_df["result"].value_counts()
-                
-                fig = px.pie(
-                    values=result_counts.values,
-                    names=result_counts.index,
-                    title="Interview Results Distribution",
-                    hole=0.3
-                )
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # Interview feedback and tracking
-        st.subheader("📋 Interview Feedback Management")
-        
-        col_feedback1, col_feedback2 = st.columns(2)
-        
-        with col_feedback1:
-            st.write("### Update Interview Status")
-            
-            if not interviews_df.empty:
-                interview_to_update = st.selectbox(
-                    "Select Interview to Update",
-                    options=interviews_df["interview_id"].tolist()
-                )
-                
-                new_status = st.selectbox(
-                    "Update Status",
-                    options=["Scheduled", "In Progress", "Completed", "Cancelled"]
-                )
-                
-                new_result = st.selectbox(
-                    "Update Result",
-                    options=["Pending", "Selected", "Rejected", "On Hold"]
-                )
-                
-                feedback = st.text_area("Interview Feedback")
-                
-                if st.button("Update Interview"):
-                    st.success(f"Updated interview {interview_to_update}")
-        
-        with col_feedback2:
-            st.write("### Interview Performance")
-            
-            # Company-wise interview performance
-            company_performance = interviews_df.groupby("company").agg({
-                "interview_id": "count",
-                "result": lambda x: (x == "Selected").sum()
-            }).reset_index()
-            company_performance["selection_rate"] = (company_performance["result"] / company_performance["interview_id"]) * 100
-            
-            fig = px.bar(
-                company_performance,
-                x="company",
-                y="selection_rate",
-                title="Selection Rate by Company",
-                labels={"company": "Company", "selection_rate": "Selection Rate (%)"}
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                st.info("No interview data available")
     
     def step7_placement_records(self):
         """Step 7: Placement Records Management"""
         st.info("Manage and track all placement offers and records")
+        
+        if self.college_data["placements"].empty:
+            st.info("No placement records available")
+            return
         
         # Overall placement statistics
         col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
@@ -882,56 +937,21 @@ class CollegeFlow:
             total_placements = len(self.college_data["placements"])
             st.metric("Total Placements", total_placements)
         with col_stats2:
-            avg_package = self.college_data["placements"]["package"].mean()
+            avg_package = self.college_data["placements"]["package"].mean() if not self.college_data["placements"].empty else 0
             st.metric("Avg Package (LPA)", f"{avg_package:.2f}")
         with col_stats3:
-            unique_companies = self.college_data["placements"]["company"].nunique()
+            unique_companies = self.college_data["placements"]["company"].nunique() if not self.college_data["placements"].empty else 0
             st.metric("Companies", unique_companies)
         with col_stats4:
-            highest_package = self.college_data["placements"]["package"].max()
+            highest_package = self.college_data["placements"]["package"].max() if not self.college_data["placements"].empty else 0
             st.metric("Highest Package", f"{highest_package:.2f} LPA")
         
         # Placement records table
         st.subheader("📋 Placement Records")
         
-        # Filters
-        col_filters1, col_filters2, col_filters3 = st.columns(3)
-        with col_filters1:
-            company_filter = st.multiselect(
-                "Filter by Company",
-                options=self.college_data["placements"]["company"].unique()
-            )
-        with col_filters2:
-            dept_filter = st.multiselect(
-                "Filter by Department",
-                options=self.college_data["placements"]["department"].unique()
-            )
-        with col_filters3:
-            package_range = st.slider(
-                "Package Range (LPA)",
-                min_value=0.0,
-                max_value=40.0,
-                value=(0.0, 40.0),
-                step=1.0
-            )
-        
-        # Apply filters
-        filtered_placements = self.college_data["placements"].copy()
-        
-        if company_filter:
-            filtered_placements = filtered_placements[filtered_placements["company"].isin(company_filter)]
-        
-        if dept_filter:
-            filtered_placements = filtered_placements[filtered_placements["department"].isin(dept_filter)]
-        
-        filtered_placements = filtered_placements[
-            (filtered_placements["package"] >= package_range[0]) &
-            (filtered_placements["package"] <= package_range[1])
-        ]
-        
         # Display table
         st.dataframe(
-            filtered_placements,
+            self.college_data["placements"],
             use_container_width=True,
             height=400
         )
@@ -942,100 +962,30 @@ class CollegeFlow:
         with col_viz1:
             st.subheader("🏢 Placements by Company")
             
-            company_placements = filtered_placements["company"].value_counts().head(10)
-            
-            fig1 = px.bar(
-                x=company_placements.values,
-                y=company_placements.index,
-                orientation='h',
-                title="Top 10 Companies by Placements",
-                labels={"x": "Number of Placements", "y": "Company"}
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            if not self.college_data["placements"].empty:
+                company_placements = self.college_data["placements"]["company"].value_counts().head(10)
+                
+                fig1 = px.bar(
+                    x=company_placements.values,
+                    y=company_placements.index,
+                    orientation='h',
+                    title="Top 10 Companies by Placements",
+                    labels={"x": "Number of Placements", "y": "Company"}
+                )
+                st.plotly_chart(fig1, use_container_width=True)
         
         with col_viz2:
             st.subheader("📊 Package Distribution")
             
-            fig2 = px.histogram(
-                filtered_placements,
-                x="package",
-                nbins=20,
-                title="Package Distribution",
-                labels={"package": "Package (LPA)", "count": "Number of Students"}
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        
-        # Department-wise analysis
-        st.subheader("🎓 Department-wise Placement Analysis")
-        
-        dept_analysis = filtered_placements.groupby("department").agg({
-            "placement_id": "count",
-            "package": ["mean", "max", "min"]
-        }).reset_index()
-        
-        dept_analysis.columns = ["Department", "Total Placements", "Avg Package", "Max Package", "Min Package"]
-        
-        col_dept1, col_dept2 = st.columns(2)
-        
-        with col_dept1:
-            st.dataframe(
-                dept_analysis.sort_values("Avg Package", ascending=False),
-                use_container_width=True
-            )
-        
-        with col_dept2:
-            fig3 = px.bar(
-                dept_analysis,
-                x="Department",
-                y=["Avg Package", "Max Package"],
-                title="Package Comparison by Department",
-                labels={"value": "Package (LPA)", "variable": "Package Type"},
-                barmode="group"
-            )
-            st.plotly_chart(fig3, use_container_width=True)
-        
-        # Add new placement record
-        st.subheader("➕ Add New Placement Record")
-        
-        with st.form("add_placement_form"):
-            col_new1, col_new2, col_new3 = st.columns(3)
-            
-            with col_new1:
-                new_student = st.selectbox(
-                    "Student",
-                    options=self.college_data["students"]["name"].tolist()
+            if not self.college_data["placements"].empty:
+                fig2 = px.histogram(
+                    self.college_data["placements"],
+                    x="package",
+                    nbins=20,
+                    title="Package Distribution",
+                    labels={"package": "Package (LPA)", "count": "Number of Students"}
                 )
-                new_company = st.text_input("Company *")
-            
-            with col_new2:
-                new_job_role = st.text_input("Job Role *")
-                new_package = st.number_input("Package (LPA) *", min_value=0.0, max_value=100.0, value=12.0)
-            
-            with col_new3:
-                new_dept = st.selectbox(
-                    "Department",
-                    options=self.college_data["students"]["department"].unique()
-                )
-                new_status = st.selectbox(
-                    "Status",
-                    options=["Offer Received", "Offer Accepted", "Joined", "Internship Completed"]
-                )
-            
-            if st.form_submit_button("Add Placement Record"):
-                if new_company and new_job_role and new_package:
-                    st.success(f"Added placement record for {new_student} at {new_company}")
-                else:
-                    st.error("Please fill all required fields (*)")
-        
-        # Export option
-        if st.button("📥 Export Placement Data"):
-            csv = filtered_placements.to_csv(index=False)
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name="placement_records.csv",
-                mime="text/csv"
-            )
+                st.plotly_chart(fig2, use_container_width=True)
     
     def step8_performance_reports(self):
         """Step 8: Performance Reports & Analytics"""
@@ -1048,17 +998,9 @@ class CollegeFlow:
                 "📈 Annual Placement Report",
                 "🏢 Company Performance Report",
                 "🎓 Department Performance Report",
-                "📅 Monthly Placement Trends",
                 "📊 Comprehensive Analytics Report"
             ]
         )
-        
-        # Date range for report
-        col_date1, col_date2 = st.columns(2)
-        with col_date1:
-            start_date = st.date_input("Start Date", value=datetime.now().date() - timedelta(days=365))
-        with col_date2:
-            end_date = st.date_input("End Date", value=datetime.now().date())
         
         # Generate report button
         if st.button("📊 Generate Report", type="primary"):
@@ -1066,185 +1008,92 @@ class CollegeFlow:
             
             # Report content based on selection
             if "Annual Placement Report" in report_type:
-                self.generate_annual_report(start_date, end_date)
+                self.generate_annual_report()
             elif "Company Performance Report" in report_type:
-                self.generate_company_report(start_date, end_date)
+                self.generate_company_report()
             elif "Department Performance Report" in report_type:
-                self.generate_department_report(start_date, end_date)
-            elif "Monthly Placement Trends" in report_type:
-                self.generate_monthly_trends(start_date, end_date)
+                self.generate_department_report()
             else:
-                self.generate_comprehensive_report(start_date, end_date)
+                self.generate_comprehensive_report()
     
-    def generate_annual_report(self, start_date, end_date):
+    def generate_annual_report(self):
         """Generate annual placement report"""
         st.subheader("📈 Annual Placement Report")
         
         # Summary statistics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            total_placements = len(self.college_data["placements"])
-            st.metric("Total Placements", total_placements)
+            if not self.college_data["placements"].empty:
+                total_placements = len(self.college_data["placements"])
+                st.metric("Total Placements", total_placements)
+            else:
+                st.metric("Total Placements", "N/A")
+        
         with col2:
-            avg_package = self.college_data["placements"]["package"].mean()
-            st.metric("Average Package", f"{avg_package:.2f} LPA")
-        with col3:
-            highest_package = self.college_data["placements"]["package"].max()
-            st.metric("Highest Package", f"{highest_package:.2f} LPA")
-        with col4:
-            companies_count = self.college_data["placements"]["company"].nunique()
-            st.metric("Companies Visited", companies_count)
+            if not self.college_data["placements"].empty:
+                avg_package = self.college_data["placements"]["package"].mean()
+                st.metric("Average Package", f"{avg_package:.2f} LPA")
+            else:
+                st.metric("Average Package", "N/A")
         
-        # Key metrics chart
-        metrics_data = pd.DataFrame({
-            "Metric": ["Placement Rate", "Avg Package", "Student Satisfaction", "Company Satisfaction"],
-            "Score": [82, 18.5, 88, 92],
-            "Target": [85, 20, 90, 90]
-        })
+        # Key insights
+        st.subheader("📋 Key Insights")
         
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Actual",
-            x=metrics_data["Metric"],
-            y=metrics_data["Score"],
-            marker_color='indianred'
-        ))
-        fig.add_trace(go.Bar(
-            name="Target",
-            x=metrics_data["Metric"],
-            y=metrics_data["Target"],
-            marker_color='lightsalmon'
-        ))
-        
-        fig.update_layout(
-            title="Key Performance Metrics vs Targets",
-            barmode="group",
-            yaxis_title="Score"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Recommendations
-        st.subheader("📋 Recommendations for Next Year")
-        
-        recommendations = [
-            "Increase focus on core engineering companies",
-            "Improve industry-academia collaboration",
-            "Enhance soft skills training programs",
-            "Expand company outreach to startups and unicorns",
-            "Implement better pre-placement training modules"
+        insights = [
+            "✅ Strong placement performance in Computer Science department",
+            "📈 Increasing average package year over year",
+            "🏢 Good diversity in recruiting companies",
+            "🎯 High placement rate for students with CGPA > 8.0",
+            "🔧 Opportunities for improvement in core engineering placements"
         ]
         
-        for i, rec in enumerate(recommendations, 1):
-            st.write(f"{i}. {rec}")
+        for insight in insights:
+            st.write(f"- {insight}")
     
-    def generate_company_report(self, start_date, end_date):
+    def generate_company_report(self):
         """Generate company performance report"""
         st.subheader("🏢 Company Performance Report")
+        
+        if self.college_data["companies"].empty:
+            st.info("No company data available")
+            return
         
         # Company performance metrics
         company_metrics = []
         for _, company in self.college_data["companies"].iterrows():
             company_metrics.append({
                 "Company": company["name"],
-                "Visits": company["visits_this_year"],
-                "Total Hires": company["total_hires"],
-                "Avg Package": company["avg_package"],
-                "Selection Rate": f"{np.random.randint(10, 50)}%"
+                "Status": company.get("status", "Active"),
+                "Total Hires": company.get("total_hires", 0),
+                "Avg Package": company.get("avg_package", "N/A")
             })
         
         metrics_df = pd.DataFrame(company_metrics)
         st.dataframe(metrics_df.sort_values("Total Hires", ascending=False), use_container_width=True)
-        
-        # Visualization
-        fig = px.scatter(
-            metrics_df,
-            x="Total Hires",
-            y="Avg Package",
-            size="Visits",
-            color="Company",
-            title="Company Performance: Hires vs Package",
-            labels={"Total Hires": "Number of Hires", "Avg Package": "Average Package (LPA)"}
-        )
-        st.plotly_chart(fig, use_container_width=True)
     
-    def generate_department_report(self, start_date, end_date):
+    def generate_department_report(self):
         """Generate department performance report"""
         st.subheader("🎓 Department Performance Report")
+        
+        if self.college_data["students"].empty:
+            st.info("No student data available")
+            return
         
         # Department-wise analysis
         dept_stats = []
         for dept in self.college_data["students"]["department"].unique():
             dept_students = self.college_data["students"][self.college_data["students"]["department"] == dept]
-            placed_students = dept_students[dept_students["placement_status"] == "Placed"]
             
             dept_stats.append({
                 "Department": dept,
                 "Total Students": len(dept_students),
-                "Placed Students": len(placed_students),
-                "Placement Rate": f"{(len(placed_students)/len(dept_students)*100):.1f}%",
-                "Avg CGPA": dept_students["cgpa"].mean(),
-                "Avg Package": placed_students["package"].mean() if not placed_students.empty else 0
+                "Avg CGPA": dept_students["cgpa"].mean() if not dept_students.empty else 0
             })
         
         stats_df = pd.DataFrame(dept_stats)
-        st.dataframe(stats_df.sort_values("Placement Rate", ascending=False), use_container_width=True)
-        
-        # Comparative visualization
-        fig = px.bar(
-            stats_df,
-            x="Department",
-            y=["Placement Rate", "Avg Package"],
-            title="Department Performance Comparison",
-            barmode="group",
-            labels={"value": "Score", "variable": "Metric"}
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(stats_df.sort_values("Avg CGPA", ascending=False), use_container_width=True)
     
-    def generate_monthly_trends(self, start_date, end_date):
-        """Generate monthly placement trends"""
-        st.subheader("📅 Monthly Placement Trends")
-        
-        # Simulate monthly data
-        months = pd.date_range(start=start_date, end=end_date, freq='MS').strftime('%b %Y')
-        monthly_data = pd.DataFrame({
-            "Month": months,
-            "Placements": np.random.randint(10, 50, size=len(months)),
-            "Avg Package": np.random.uniform(10, 25, size=len(months)),
-            "Companies": np.random.randint(5, 15, size=len(months))
-        })
-        
-        # Line chart for trends
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=monthly_data["Month"],
-            y=monthly_data["Placements"],
-            name="Placements",
-            yaxis="y"
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=monthly_data["Month"],
-            y=monthly_data["Avg Package"],
-            name="Avg Package (LPA)",
-            yaxis="y2"
-        ))
-        
-        fig.update_layout(
-            title="Monthly Placement Trends",
-            xaxis_title="Month",
-            yaxis=dict(title="Number of Placements", side="left"),
-            yaxis2=dict(title="Average Package (LPA)", side="right", overlaying="y"),
-            legend=dict(x=0.1, y=1.1, orientation="h")
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Display monthly data
-        st.dataframe(monthly_data, use_container_width=True)
-    
-    def generate_comprehensive_report(self, start_date, end_date):
+    def generate_comprehensive_report(self):
         """Generate comprehensive analytics report"""
         st.subheader("📊 Comprehensive Analytics Report")
         
@@ -1253,83 +1102,25 @@ class CollegeFlow:
         
         summary_cols = st.columns(3)
         with summary_cols[0]:
-            st.metric("Overall Placement Rate", "82%", "+2% YoY")
-        with summary_cols[1]:
-            st.metric("Average Package", "18.5 LPA", "+1.5 LPA YoY")
-        with summary_cols[2]:
-            st.metric("Top Recruiter", "Google", "25 offers")
+            if not self.college_data["students"].empty:
+                total_students = len(self.college_data["students"])
+                placed = len(self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"])
+                rate = (placed / total_students * 100) if total_students > 0 else 0
+                st.metric("Placement Rate", f"{rate:.1f}%")
         
-        # SWOT Analysis
-        st.subheader("🔍 SWOT Analysis")
+        # Recommendations
+        st.subheader("🎯 Recommendations")
         
-        swot_cols = st.columns(2)
+        recommendations = [
+            "Increase industry-academia collaboration programs",
+            "Enhance soft skills and interview preparation",
+            "Expand recruitment to more startups and product companies",
+            "Implement better tracking of student skill development",
+            "Increase international placement opportunities"
+        ]
         
-        with swot_cols[0]:
-            st.write("**Strengths**")
-            strengths = [
-                "Strong industry connections",
-                "High-quality technical curriculum",
-                "Active alumni network",
-                "Good campus infrastructure"
-            ]
-            for strength in strengths:
-                st.write(f"✓ {strength}")
-            
-            st.write("**Weaknesses**")
-            weaknesses = [
-                "Limited soft skills training",
-                "Low participation in core companies",
-                "Seasonal placement patterns"
-            ]
-            for weakness in weaknesses:
-                st.write(f"✗ {weakness}")
-        
-        with swot_cols[1]:
-            st.write("**Opportunities**")
-            opportunities = [
-                "Growing startup ecosystem",
-                "Remote work opportunities",
-                "International placements",
-                "Industry research collaborations"
-            ]
-            for opportunity in opportunities:
-                st.write(f"🔮 {opportunity}")
-            
-            st.write("**Threats**")
-            threats = [
-                "Economic slowdown",
-                "Increased competition",
-                "Changing industry requirements",
-                "Skill gap issues"
-            ]
-            for threat in threats:
-                st.write(f"⚠️ {threat}")
-        
-        # Action Plan
-        st.subheader("🎯 Recommended Action Plan")
-        
-        action_plan = pd.DataFrame({
-            "Priority": ["High", "High", "Medium", "Medium", "Low"],
-            "Action": [
-                "Implement comprehensive soft skills program",
-                "Increase core company outreach",
-                "Establish industry mentorship program",
-                "Enhance interview preparation modules",
-                "Develop international placement cell"
-            ],
-            "Timeline": ["Q1 2024", "Q2 2024", "Q3 2024", "Q4 2024", "Q1 2025"],
-            "Responsibility": ["Placement Cell", "Department Heads", "Alumni Association", "Training Team", "International Office"]
-        })
-        
-        st.dataframe(action_plan, use_container_width=True)
-        
-        # Download report option
-        st.download_button(
-            label="📥 Download Complete Report",
-            data="This is a sample comprehensive report content.",
-            file_name="comprehensive_placement_report.pdf",
-            mime="application/pdf"
-        )
+        for i, rec in enumerate(recommendations, 1):
+            st.write(f"{i}. {rec}")
     
     def display_workflow_navigation(self, current_step):
         """Display navigation buttons for workflow"""
@@ -1352,8 +1143,11 @@ class CollegeFlow:
                         st.rerun()
             
             with col2:
-                # Show step summary
-                st.info(f"**Step {current_step} of 8** - Complete this step before proceeding")
+                # Database status
+                if not st.session_state.demo_mode and st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+                    st.caption("💾 Connected to Live Database")
+                else:
+                    st.caption("⚠️ Demo Mode - Data not saved")
             
             with col3:
                 if current_step < 8:
