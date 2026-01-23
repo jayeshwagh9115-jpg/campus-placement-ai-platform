@@ -135,56 +135,107 @@ class StudentFlow:
             if self.demo_mode or not self.db_manager:
                 st.warning("⚠️ Running in demo mode - Profile saved locally only")
                 return True
-            
+        
             # Check if we have required methods
             if not hasattr(self.db_manager, 'save_student_profile'):
-                st.error("Database manager doesn't support saving student profiles")
+                st.error(f"Database manager doesn't support saving student profiles. Available methods: {[m for m in dir(self.db_manager) if not m.startswith('_')]}")
                 return False
-            
+        
             # Prepare profile data
             profile_data = self.student_data["profile"].copy()
-            
+        
+            # Debug: Show what we're trying to save
+            st.info(f"🔍 Trying to save profile data: {json.dumps(profile_data, indent=2)}")
+        
             # Add student ID if available in session state
             student_id = st.session_state.get('student_id')
             if student_id:
                 profile_data['id'] = student_id
             
+            # Validate data before saving
+            validation = self.db_manager.validate_student_data(profile_data)
+            if hasattr(self.db_manager, 'validate_student_data'):
+                validation = self.db_manager.validate_student_data(profile_data)
+                if not validation['valid']:
+                    st.error(f"❌ Data validation failed: {', '.join(validation['errors'])}")
+                    if validation['warnings']:
+                        st.warning(f"⚠️ Warnings: {', '.join(validation['warnings'])}")
+                    return False
+        
+            # Try to save profile
+            st.info("💾 Attempting to save to database...")
+        
+            # Check database connection status
+            if not self.db_manager.is_connected:
+                st.error("❌ Database is not connected")
+                return False
+        
             # Save profile
             success = self.db_manager.save_student_profile(profile_data)
-            
+        
             if success:
+                st.success("✅ Profile saved to database successfully!")
+            
                 # Save related data
                 student_id = profile_data.get('id') or self.get_student_id_from_db()
-                
+            
                 if student_id:
-                    # Save education
-                    for edu in self.student_data["education"]:
-                        edu['student_id'] = student_id
-                        self.db_manager.save_student_education(edu)
-                    
-                    # Save projects
-                    for project in self.student_data["projects"]:
-                        project['student_id'] = student_id
-                        self.db_manager.save_student_project(project)
-                    
-                    # Save internships
-                    for internship in self.student_data["internships"]:
-                        internship['student_id'] = student_id
-                        self.db_manager.save_student_internship(internship)
-                    
-                    # Save certifications
-                    for cert in self.student_data["certifications"]:
-                        cert['student_id'] = student_id
-                        self.db_manager.save_student_certification(cert)
+                    st.info(f"📝 Student ID: {student_id}")
                 
-                st.success("✅ Profile saved to database successfully!")
+                    # Save education
+                    if self.student_data["education"]:
+                        for edu in self.student_data["education"]:
+                            edu['student_id'] = student_id
+                            if hasattr(self.db_manager, 'save_student_education'):
+                                self.db_manager.save_student_education(edu)
+                
+                    # Save projects
+                    if self.student_data["projects"]:
+                        for project in self.student_data["projects"]:
+                            project['student_id'] = student_id
+                            if hasattr(self.db_manager, 'save_student_project'):
+                                self.db_manager.save_student_project(project)
+                
+                    # Save internships
+                    if self.student_data["internships"]:
+                        for internship in self.student_data["internships"]:
+                            internship['student_id'] = student_id
+                            if hasattr(self.db_manager, 'save_student_internship'):
+                                self.db_manager.save_student_internship(internship)
+                
+                    # Save certifications
+                    if self.student_data["certifications"]:
+                        for cert in self.student_data["certifications"]:
+                            cert['student_id'] = student_id
+                            if hasattr(self.db_manager, 'save_student_certification'):
+                                self.db_manager.save_student_certification(cert)
+            
                 return True
             else:
                 st.error("❌ Failed to save profile to database")
+            
+                # Try to get more detailed error
+                try:
+                    # Test if we can insert a simple record
+                    test_data = {
+                        "full_name": "Test Student",
+                        "email": f"test{random.randint(1000, 9999)}@test.com",
+                        "roll_number": f"TEST{random.randint(1000, 9999)}"
+                    }
+                    test_result = self.db_manager.insert('students', test_data)
+                    if test_result:
+                        st.success("✅ Can insert test data - issue might be with your data")
+                        st.info(f"Test insert returned: {test_result}")
+                    else:
+                        st.error("❌ Cannot insert any data - database issue")
+                except Exception as e:
+                    st.error(f"❌ Database error: {str(e)}")
+            
                 return False
                 
         except Exception as e:
             st.error(f"❌ Error saving to database: {str(e)}")
+            st.code(traceback.format_exc())
             return False
     
     def get_student_id_from_db(self):
