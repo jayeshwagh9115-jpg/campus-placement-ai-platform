@@ -1,234 +1,201 @@
 import streamlit as st
-from supabase import create_client, Client
-import os
-from dotenv import load_dotenv
+from supabase import create_client
+import requests
+import json
 from typing import Optional, List, Dict, Any
-
-load_dotenv()
 
 class SupabaseManager:
     def __init__(self):
-        self.is_connected = False
         self.client = None
+        self.is_connected = False
+        self.url = None
+        self.key = None
         
-        # Get Supabase credentials - only URL and KEY are needed
-        self.url = st.secrets.get("SUPABASE_URL", os.environ.get("https://ptnozudvgcqhnmidjoqj.supabase.co"))
-        self.key = st.secrets.get("SUPABASE_KEY", os.environ.get("sb_publishable_WRZY__f0rKmSL0r5KCmZqA_yWf64uW0"))
+        # Try multiple ways to get credentials
+        self.url = "https://ptnozudvgcqhnmidjoqj.supabase.co"
+        self.key = "sb_publishable_WRZY__f0rKmSL0r5KCmZqA_yWf64uW0"
         
-        if self.url and self.key:
+        # If empty, try other sources
+        if not self.url or not self.key:
             try:
-                self.client = create_client(self.url, self.key)
-                # Test connection with a safer query
-                self.client.from_('students').select('id').limit(1).execute()
+                self.url = st.secrets.get("SUPABASE_URL", "")
+                self.key = st.secrets.get("SUPABASE_KEY", "")
+            except:
+                pass
+        
+        print(f"🔗 Using URL: {self.url}")
+        print(f"🔑 Using Key: {self.key[:15]}...")
+        
+        if not self.url or not self.key:
+            print("❌ Missing Supabase credentials")
+            return
+        
+        try:
+            # Create client
+            self.client = create_client(self.url, self.key)
+            
+            # Test connection with a safer method
+            try:
+                # Method 1: Try to get server version
+                test_response = self.client.from_('').select('*').limit(0).execute()
+                print("✅ Connection test passed")
                 self.is_connected = True
-                print("✅ Connected to Supabase")
-            except Exception as e:
-                print(f"❌ Supabase connection error: {e}")
-                self.is_connected = False
-        else:
-            print("⚠️ Supabase credentials not found")
+            except Exception as test_error:
+                # Method 2: Try direct REST API
+                print(f"Client test error: {test_error}")
+                self._test_direct_api()
+                
+        except Exception as e:
+            print(f"❌ Failed to create Supabase client: {e}")
             self.is_connected = False
     
-    # ---------- STUDENT OPERATIONS ----------
+    def _test_direct_api(self):
+        """Test connection using direct REST API"""
+        try:
+            headers = {
+                "apikey": self.key,
+                "Authorization": f"Bearer {self.key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Try to access a table
+            response = requests.get(
+                f"{self.url}/rest/v1/students",
+                headers=headers,
+                params={"select": "count", "limit": "1"}
+            )
+            
+            if response.status_code in [200, 201, 204]:
+                self.is_connected = True
+                print(f"✅ Direct API connection successful")
+            else:
+                print(f"❌ API returned status {response.status_code}: {response.text[:100]}")
+                self.is_connected = False
+                
+        except Exception as e:
+            print(f"❌ Direct API test failed: {e}")
+            self.is_connected = False
+    
+    # ---------- SAFE OPERATIONS WITH FALLBACK ----------
+    def safe_execute(self, operation, *args, **kwargs):
+        """Safely execute a database operation with error handling"""
+        if not self.is_connected or not self.client:
+            return None
+        
+        try:
+            return operation(*args, **kwargs)
+        except Exception as e:
+            st.error(f"Database operation failed: {e}")
+            return None
+    
+    # ---------- CRUD OPERATIONS ----------
+    def insert(self, table: str, data: Dict) -> Optional[Dict]:
+        """Insert data into table"""
+        if not self.is_connected:
+            return None
+        
+        try:
+            response = self.client.table(table).insert(data).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            # Try direct API as fallback
+            try:
+                headers = {
+                    "apikey": self.key,
+                    "Authorization": f"Bearer {self.key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                }
+                
+                response = requests.post(
+                    f"{self.url}/rest/v1/{table}",
+                    headers=headers,
+                    json=data
+                )
+                
+                if response.status_code == 201:
+                    return response.json()[0] if response.json() else None
+            except:
+                pass
+            
+            st.error(f"Insert to {table} failed: {e}")
+            return None
+    
+    def select(self, table: str, filters: Dict = None, limit: int = 100) -> List[Dict]:
+        """Select data from table"""
+        if not self.is_connected:
+            return []
+        
+        try:
+            query = self.client.table(table).select("*")
+            
+            if filters:
+                for key, value in filters.items():
+                    query = query.eq(key, value)
+            
+            query = query.limit(limit)
+            response = query.execute()
+            return response.data if response.data else []
+        except Exception as e:
+            st.error(f"Select from {table} failed: {e}")
+            return []
+    
+    def update(self, table: str, id_value: str, updates: Dict) -> Optional[Dict]:
+        """Update data in table"""
+        if not self.is_connected:
+            return None
+        
+        try:
+            response = self.client.table(table).update(updates).eq('id', id_value).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            st.error(f"Update in {table} failed: {e}")
+            return None
+    
+    # ---------- APP-SPECIFIC METHODS ----------
     def create_student(self, student_data: Dict) -> Optional[Dict]:
-        """Create a new student record"""
-        try:
-            response = self.client.table('students').insert(student_data).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error creating student: {e}")
-            return None
+        return self.insert('students', student_data)
     
-    def get_students(self, college_id: Optional[str] = None) -> List[Dict]:
-        """Get all students or students from specific college"""
-        try:
-            query = self.client.table('students').select("*")
-            if college_id:
-                query = query.eq('college_id', college_id)
-            response = query.execute()
-            return response.data if response.data else []
-        except Exception as e:
-            st.error(f"Error fetching students: {e}")
-            return []
+    def get_students(self, college_id: str = None) -> List[Dict]:
+        if college_id:
+            return self.select('students', {'college_id': college_id})
+        return self.select('students')
     
-    def get_student_by_email(self, email: str) -> Optional[Dict]:
-        """Get student by email"""
+    def get_student_count(self) -> int:
         try:
-            response = self.client.table('students').select("*").eq('email', email).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error fetching student by email: {e}")
-            return None
+            response = self.client.table('students').select('*', count='exact').execute()
+            return response.count if hasattr(response, 'count') else 0
+        except:
+            return len(self.get_students())
     
-    def update_student(self, student_id: str, updates: Dict) -> Optional[Dict]:
-        """Update student record"""
-        try:
-            response = self.client.table('students').update(updates).eq('id', student_id).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error updating student: {e}")
-            return None
+    def create_job(self, job_data: Dict) -> Optional[Dict]:
+        return self.insert('job_postings', job_data)
     
-    # ---------- COLLEGE OPERATIONS ----------
-    def create_college(self, college_data: Dict) -> Optional[Dict]:
-        """Create a new college record"""
-        try:
-            response = self.client.table('colleges').insert(college_data).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error creating college: {e}")
-            return None
+    def get_jobs(self) -> List[Dict]:
+        return self.select('job_postings')
     
-    def get_colleges(self) -> List[Dict]:
-        """Get all colleges"""
-        try:
-            response = self.client.table('colleges').select("*").execute()
-            return response.data if response.data else []
-        except Exception as e:
-            st.error(f"Error fetching colleges: {e}")
-            return []
+    def create_application(self, app_data: Dict) -> Optional[Dict]:
+        return self.insert('applications', app_data)
     
-    def get_college_by_email(self, email: str) -> Optional[Dict]:
-        """Get college by email"""
-        try:
-            response = self.client.table('colleges').select("*").eq('email', email).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error fetching college by email: {e}")
-            return None
-    
-    # ---------- COMPANY OPERATIONS ----------
-    def create_company(self, company_data: Dict) -> Optional[Dict]:
-        """Create a new company record"""
-        try:
-            response = self.client.table('companies').insert(company_data).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error creating company: {e}")
-            return None
-    
-    def get_companies(self) -> List[Dict]:
-        """Get all companies"""
-        try:
-            response = self.client.table('companies').select("*").execute()
-            return response.data if response.data else []
-        except Exception as e:
-            st.error(f"Error fetching companies: {e}")
-            return []
-    
-    def get_company_by_email(self, email: str) -> Optional[Dict]:
-        """Get company by email"""
-        try:
-            response = self.client.table('companies').select("*").eq('email', email).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error fetching company by email: {e}")
-            return None
-    
-    # ---------- JOB OPERATIONS ----------
-    def create_job_posting(self, job_data: Dict) -> Optional[Dict]:
-        """Create a new job posting"""
-        try:
-            response = self.client.table('job_postings').insert(job_data).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error creating job posting: {e}")
-            return None
-    
-    def get_jobs(self, company_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict]:
-        """Get all jobs or filter by company/status"""
-        try:
-            query = self.client.table('job_postings').select("*, companies(*)")
-            if company_id:
-                query = query.eq('company_id', company_id)
-            if status:
-                query = query.eq('status', status)
-            response = query.execute()
-            return response.data if response.data else []
-        except Exception as e:
-            st.error(f"Error fetching jobs: {e}")
-            return []
-    
-    def update_job_status(self, job_id: str, status: str) -> Optional[Dict]:
-        """Update job status"""
-        try:
-            response = self.client.table('job_postings').update({'status': status}).eq('id', job_id).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error updating job status: {e}")
-            return None
-    
-    # ---------- APPLICATION OPERATIONS ----------
-    def create_application(self, application_data: Dict) -> Optional[Dict]:
-        """Create a new application"""
-        try:
-            response = self.client.table('applications').insert(application_data).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error creating application: {e}")
-            return None
-    
-    def get_applications(self, student_id: Optional[str] = None, 
-                         job_id: Optional[str] = None,
-                         company_id: Optional[str] = None) -> List[Dict]:
-        """Get applications with optional filters"""
-        try:
-            query = self.client.table('applications').select("""
-                *,
-                students (*),
-                job_postings (*, companies (*))
-            """)
-            
-            if student_id:
-                query = query.eq('student_id', student_id)
-            if job_id:
-                query = query.eq('job_id', job_id)
-            if company_id:
-                query = query.eq('job_postings.company_id', company_id)
-            
-            response = query.execute()
-            return response.data if response.data else []
-        except Exception as e:
-            st.error(f"Error fetching applications: {e}")
-            return []
-    
-    def update_application_status(self, application_id: str, status: str, notes: str = None) -> Optional[Dict]:
-        """Update application status"""
-        try:
-            updates = {'status': status}
-            if notes:
-                updates['notes'] = notes
-            response = self.client.table('applications').update(updates).eq('id', application_id).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            st.error(f"Error updating application: {e}")
-            return None
-    
-    # ---------- STATISTICS OPERATIONS ----------
-    def get_dashboard_stats(self) -> Dict[str, Any]:
+    def get_dashboard_stats(self) -> Dict:
         """Get dashboard statistics"""
-        try:
-            stats = {}
-            
-            # Get counts
-            students_count = self.client.table('students').select('count', count='exact').execute()
-            companies_count = self.client.table('companies').select('count', count='exact').execute()
-            jobs_count = self.client.table('job_postings').select('count', count='exact').eq('status', 'open').execute()
-            applications_count = self.client.table('applications').select('count', count='exact').execute()
-            
-            stats['total_students'] = students_count.count if students_count.count else 0
-            stats['total_companies'] = companies_count.count if companies_count.count else 0
-            stats['active_jobs'] = jobs_count.count if jobs_count.count else 0
-            stats['total_applications'] = applications_count.count if applications_count.count else 0
-            
-            # Get recent activities
-            recent_jobs = self.client.table('job_postings').select("*, companies(name)").order('created_at', desc=True).limit(5).execute()
-            recent_apps = self.client.table('applications').select("*, students(full_name), job_postings(title)").order('applied_at', desc=True).limit(5).execute()
-            
-            stats['recent_jobs'] = recent_jobs.data if recent_jobs.data else []
-            stats['recent_applications'] = recent_apps.data if recent_apps.data else []
-            
+        stats = {
+            'total_students': 0,
+            'active_jobs': 0,
+            'total_companies': 0,
+            'total_applications': 0
+        }
+        
+        if not self.is_connected:
             return stats
+        
+        try:
+            # Get counts
+            stats['total_students'] = self.get_student_count()
+            stats['total_companies'] = len(self.select('companies'))
+            stats['active_jobs'] = len(self.select('job_postings', {'status': 'open'}))
+            stats['total_applications'] = len(self.select('applications'))
         except Exception as e:
-            st.error(f"Error fetching dashboard stats: {e}")
-            return {}
+            st.error(f"Error getting stats: {e}")
+        
+        return stats
