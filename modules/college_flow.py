@@ -2,604 +2,368 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import numpy as np
-from typing import List, Dict, Optional
+from datetime import datetime
+import random
 
 class CollegeFlow:
     def __init__(self):
-        self.college_data = self.initialize_college_data()
-        # Initialize current_step from session state or default to 1
-        self.current_step = st.session_state.get('current_step_college', 1)
+        self.current_step = 1
+        self.total_steps = 5
+        self.db_manager = None  # Initialize as None
+        self.demo_mode = True  # Default to demo mode
+        
+        # Initialize college data
+        self.college_data = {
+            "profile": {
+                "name": "",
+                "address": "",
+                "website": "",
+                "contact_email": "",
+                "contact_phone": "",
+                "placement_officer": "",
+                "departments": [],
+                "accreditation": "",
+                "established_year": ""
+            },
+            "students": [],
+            "placements": [],
+            "recruiters": [],
+            "reports": []
+        }
+        
+        # Load demo data if no db connection
+        if self.db_manager is None:
+            self.load_demo_data()
     
-    def initialize_college_data(self):
-        """Initialize college data"""
-        return {
-            "college_name": "ABC Engineering College",
-            "college_id": None,
-            "students": pd.DataFrame(),
-            "companies": pd.DataFrame(),
-            "drives": pd.DataFrame(),
-            "placements": pd.DataFrame(),
-            "interviews": pd.DataFrame()
+    def set_database_manager(self, db_manager, demo_mode=False):
+        """Set the database manager for this flow"""
+        self.db_manager = db_manager
+        self.demo_mode = demo_mode
+        
+        # If we have a db manager, try to load data
+        if not self.demo_mode and self.db_manager:
+            self.load_from_database()
+        else:
+            self.load_demo_data()
+    
+    def load_demo_data(self):
+        """Load demo data for testing"""
+        self.college_data = {
+            "profile": {
+                "name": "IIT Bombay",
+                "address": "Powai, Mumbai, Maharashtra 400076",
+                "website": "https://www.iitb.ac.in",
+                "contact_email": "placement@iitb.ac.in",
+                "contact_phone": "+91 22 2572 2545",
+                "placement_officer": "Dr. Rajesh Kumar",
+                "departments": ["Computer Science", "Electrical", "Mechanical", "Civil", "Chemical"],
+                "accreditation": "NAAC A++",
+                "established_year": "1958"
+            },
+            "students": [
+                {"id": "2023CS001", "name": "John Doe", "department": "Computer Science", "cgpa": 8.5, "status": "Placed"},
+                {"id": "2023CS002", "name": "Jane Smith", "department": "Computer Science", "cgpa": 9.2, "status": "Placed"},
+                {"id": "2023EE001", "name": "Bob Johnson", "department": "Electrical", "cgpa": 7.8, "status": "Seeking"}
+            ],
+            "placements": [
+                {"company": "Google", "students_placed": 15, "avg_package": 25.5, "year": "2023"},
+                {"company": "Microsoft", "students_placed": 12, "avg_package": 22.0, "year": "2023"}
+            ],
+            "recruiters": ["Google", "Microsoft", "Amazon", "TCS", "Infosys"],
+            "reports": []
         }
     
-    # ==================== DATABASE METHODS ====================
-    
-    def get_from_database(self, data_type: str, college_id: str = None) -> pd.DataFrame:
-        """Get data from database"""
-        if st.session_state.demo_mode:
-            return pd.DataFrame()  # Will use sample data in demo mode
-        
-        db = st.session_state.get('db_manager')
-        if not db or not db.is_connected:
-            return pd.DataFrame()
-        
+    def load_from_database(self):
+        """Load college data from database"""
         try:
-            if data_type == 'students':
+            if self.db_manager and hasattr(self.db_manager, 'get_college_profile'):
+                # Try to get college profile from database
+                college_id = st.session_state.get('college_id')
                 if college_id:
-                    data = db.get_students(college_id=college_id)
-                else:
-                    data = db.get_students()
-                return pd.DataFrame(data) if data else pd.DataFrame()
-            
-            elif data_type == 'companies':
-                data = db.get_companies()
-                return pd.DataFrame(data) if data else pd.DataFrame()
-            
-            elif data_type == 'jobs':
-                data = db.get_jobs()
-                return pd.DataFrame(data) if data else pd.DataFrame()
-            
-            elif data_type == 'applications':
-                data = db.get_applications()
-                return pd.DataFrame(data) if data else pd.DataFrame()
-            
-            elif data_type == 'colleges':
-                data = db.get_colleges()
-                return pd.DataFrame(data) if data else pd.DataFrame()
-            
+                    profile = self.db_manager.get_college_profile(college_id)
+                    if profile:
+                        self.college_data["profile"] = profile
+                        
+                        # Load other data
+                        self.college_data["students"] = self.db_manager.get_college_students(college_id)
+                        self.college_data["placements"] = self.db_manager.get_college_placements(college_id)
+                        self.college_data["recruiters"] = self.db_manager.get_college_recruiters(college_id)
+                        self.college_data["reports"] = self.db_manager.get_college_reports(college_id)
         except Exception as e:
-            st.error(f"Database error fetching {data_type}: {e}")
-        
-        return pd.DataFrame()
+            st.error(f"Error loading from database: {e}")
+            self.load_demo_data()
     
-    def save_to_database(self, data_type: str, data: Dict) -> bool:
-        """Save data to database"""
-        if st.session_state.demo_mode:
-            return True  # Return success in demo mode
-        
-        db = st.session_state.get('db_manager')
-        if not db or not db.is_connected:
-            return False
-        
+    def save_profile_to_database(self):
+        """Save college profile to database"""
         try:
-            if data_type == 'student':
-                result = db.create_student(data)
-            elif data_type == 'company':
-                result = db.insert('companies', data)
-            elif data_type == 'college':
-                result = db.create_college(data)
-            elif data_type == 'job':
-                result = db.create_job(data)
-            elif data_type == 'application':
-                result = db.create_application(data)
-            else:
+            if self.demo_mode or not self.db_manager:
+                st.warning("⚠️ Running in demo mode - Profile saved locally only")
+                return True
+            
+            # Check if we have required methods
+            if not hasattr(self.db_manager, 'save_college_profile'):
+                st.error("Database manager doesn't support saving college profiles")
                 return False
             
-            return result is not None
+            # Prepare profile data
+            profile_data = self.college_data["profile"].copy()
             
+            # Add college ID if available in session state
+            college_id = st.session_state.get('college_id')
+            if college_id:
+                profile_data['id'] = college_id
+            
+            # Save profile
+            success = self.db_manager.save_college_profile(profile_data)
+            
+            if success:
+                st.success("✅ College profile saved to database successfully!")
+                return True
+            else:
+                st.error("❌ Failed to save profile to database")
+                return False
+                
         except Exception as e:
-            st.error(f"Database error saving {data_type}: {e}")
+            st.error(f"❌ Error saving to database: {str(e)}")
             return False
     
-    def get_current_college_id(self) -> Optional[str]:
-        """Get current college ID from session or database"""
-        # Try to get from session state first
-        college_id = st.session_state.get('current_college_id')
-        
-        if college_id:
-            return college_id
-        
-        # If not in session, try to get from database using college email
-        if 'college_email' in st.session_state:
-            db = st.session_state.get('db_manager')
-            if db and db.is_connected:
-                colleges = db.get_colleges()
-                college = next((c for c in colleges if c.get('email') == st.session_state.college_email), None)
-                if college:
-                    st.session_state.current_college_id = college.get('id')
-                    return college.get('id')
-        
-        return None
-    
-    def load_college_data(self):
-        """Load all college-related data from database"""
-        if st.session_state.demo_mode:
-            # Load sample data for demo mode
-            self.load_sample_data()
-            return
-        
-        college_id = self.get_current_college_id()
-        
-        if not college_id:
-            st.warning("College ID not found. Running in demo mode.")
-            self.load_sample_data()
-            return
-        
-        # Load real data from database
-        with st.spinner("Loading college data..."):
-            # Students
-            students_data = self.get_from_database('students', college_id)
-            if not students_data.empty:
-                self.college_data["students"] = students_data
-            else:
-                st.info("No students found in database. Using sample data.")
-                self.college_data["students"] = self.generate_sample_students()
-            
-            # Companies
-            companies_data = self.get_from_database('companies')
-            if not companies_data.empty:
-                self.college_data["companies"] = companies_data
-            else:
-                self.college_data["companies"] = self.generate_sample_companies()
-            
-            # Load other data (you can add database methods for these)
-            self.college_data["drives"] = self.generate_sample_drives()
-            self.college_data["placements"] = self.generate_sample_placements()
-            self.college_data["interviews"] = self.generate_sample_interviews()
-    
-    def load_sample_data(self):
-        """Load sample data for demo mode"""
-        self.college_data["students"] = self.generate_sample_students()
-        self.college_data["companies"] = self.generate_sample_companies()
-        self.college_data["drives"] = self.generate_sample_drives()
-        self.college_data["placements"] = self.generate_sample_placements()
-        self.college_data["interviews"] = self.generate_sample_interviews()
-    
-    def generate_sample_students(self):
-        """Generate sample student data for demo mode"""
-        np.random.seed(42)
-        n_students = 150
-        
-        departments = ["Computer Science", "Electrical Engineering", 
-                      "Mechanical Engineering", "Civil Engineering", "Information Technology"]
-        years = [2022, 2023, 2024]
-        
-        data = []
-        for i in range(n_students):
-            dept = departments[i % len(departments)]
-            grad_year = years[i % len(years)]
-            
-            student = {
-                "id": f"S{i+1:04d}",
-                "full_name": f"Student {i+1}",
-                "department": dept,
-                "semester": np.random.randint(3, 9),
-                "cgpa": round(6.5 + np.random.random() * 3, 2),
-                "backlogs": np.random.randint(0, 4),
-                "graduation_year": grad_year,
-                "placement_status": "Not Placed" if i < 100 else "Placed",
-                "company": None if i < 100 else ["Google", "Microsoft", "Amazon", "TCS", "Infosys"][i % 5],
-                "package": None if i < 100 else round(8 + np.random.random() * 12, 2),
-                "email": f"student{i+1}@college.edu",
-                "phone": f"+91 98765{np.random.randint(10000, 99999)}"
-            }
-            
-            # Add some interns
-            if 50 <= i < 70:
-                student["placement_status"] = "Intern"
-                student["company"] = ["TechCorp", "StartupX", "InnovateLabs"][i % 3]
-                student["package"] = round(0.5 + np.random.random() * 0.5, 2)
-            
-            data.append(student)
-        
-        return pd.DataFrame(data)
-    
-    def generate_sample_companies(self):
-        """Generate sample company data for demo mode"""
-        companies = [
-            {
-                "id": "C001",
-                "name": "Google",
-                "industry": "Technology",
-                "website": "https://google.com",
-                "contact_person": "John Doe",
-                "email": "campus@google.com",
-                "phone": "+1-650-253-0000",
-                "status": "Active",
-                "total_hires": 25,
-                "avg_package": 22.5
-            },
-            {
-                "id": "C002",
-                "name": "Microsoft",
-                "industry": "Software",
-                "website": "https://microsoft.com",
-                "contact_person": "Jane Smith",
-                "email": "university@microsoft.com",
-                "phone": "+1-425-882-8080",
-                "status": "Active",
-                "total_hires": 18,
-                "avg_package": 20.0
-            },
-            {
-                "id": "C003",
-                "name": "Amazon",
-                "industry": "E-commerce",
-                "website": "https://amazon.com",
-                "contact_person": "Bob Johnson",
-                "email": "campus@amazon.com",
-                "phone": "+1-206-266-1000",
-                "status": "Active",
-                "total_hires": 15,
-                "avg_package": 18.5
-            },
-            {
-                "id": "C004",
-                "name": "TCS",
-                "industry": "IT Services",
-                "website": "https://tcs.com",
-                "contact_person": "Alice Brown",
-                "email": "campus@tcs.com",
-                "phone": "+91-22-6778-9999",
-                "status": "Active",
-                "total_hires": 45,
-                "avg_package": 8.5
-            },
-            {
-                "id": "C005",
-                "name": "Infosys",
-                "industry": "IT Services",
-                "website": "https://infosys.com",
-                "contact_person": "Charlie Wilson",
-                "email": "campus@infosys.com",
-                "phone": "+91-80-2852-0261",
-                "status": "Active",
-                "total_hires": 38,
-                "avg_package": 8.0
-            }
-        ]
-        return pd.DataFrame(companies)
-    
-    def generate_sample_drives(self):
-        """Generate sample campus drives for demo mode"""
-        drives = []
-        companies = ["Google", "Microsoft", "Amazon", "TCS", "Infosys"]
-        
-        for i in range(10):
-            drive_date = datetime.now() + timedelta(days=np.random.randint(10, 90))
-            
-            drive = {
-                "drive_id": f"D{i+1:03d}",
-                "company": companies[i % len(companies)],
-                "date": drive_date.strftime("%Y-%m-%d"),
-                "mode": np.random.choice(["Online", "Offline", "Hybrid"]),
-                "venue": "Main Campus Auditorium" if i % 2 == 0 else "Virtual",
-                "coordinator": f"Coordinator {i+1}",
-                "status": "Scheduled" if i < 7 else "Completed",
-                "registered": np.random.randint(50, 200),
-                "selected": np.random.randint(5, 25) if i >= 7 else 0,
-                "job_roles": "SDE, Data Scientist" if i % 2 == 0 else "PM, Business Analyst"
-            }
-            drives.append(drive)
-        
-        return pd.DataFrame(drives)
-    
-    def generate_sample_placements(self):
-        """Generate sample placement records for demo mode"""
-        placements = []
-        companies = ["Google", "Microsoft", "Amazon", "TCS", "Infosys", 
-                    "Adobe", "Intel", "Oracle", "Cisco", "IBM"]
-        
-        for i in range(50):
-            placement = {
-                "placement_id": f"P{i+1:04d}",
-                "student_id": f"S{np.random.randint(1000, 1150):04d}",
-                "student_name": f"Student {i+151}",
-                "department": np.random.choice(["Computer Science", "Electrical", "Mechanical", "Civil", "IT"]),
-                "company": companies[i % len(companies)],
-                "job_role": np.random.choice(["Software Engineer", "Data Scientist", "Product Manager", 
-                                            "Business Analyst", "DevOps Engineer"]),
-                "package": round(8 + np.random.random() * 22, 2),
-                "placement_date": (datetime.now() - timedelta(days=np.random.randint(1, 365))).strftime("%Y-%m-%d"),
-                "status": np.random.choice(["Offer Accepted", "Joined", "Completed Internship"])
-            }
-            placements.append(placement)
-        
-        return pd.DataFrame(placements)
-    
-    def generate_sample_interviews(self):
-        """Generate sample interview records for demo mode"""
-        interviews = []
-        rounds = ["Aptitude Test", "Technical Round 1", "Technical Round 2", "HR Round", "Managerial Round"]
-        
-        for i in range(30):
-            interview_date = datetime.now() + timedelta(days=np.random.randint(1, 30))
-            
-            interview = {
-                "interview_id": f"I{i+1:04d}",
-                "student_id": f"S{np.random.randint(1000, 1100):04d}",
-                "student_name": f"Student {np.random.randint(1, 150)}",
-                "company": np.random.choice(["Google", "Microsoft", "Amazon", "TCS", "Infosys"]),
-                "round": rounds[i % len(rounds)],
-                "date": interview_date.strftime("%Y-%m-%d"),
-                "time": f"{np.random.randint(9, 17):02d}:00",
-                "mode": np.random.choice(["Online", "Offline"]),
-                "interviewer": f"Interviewer {np.random.randint(1, 20)}",
-                "status": np.random.choice(["Scheduled", "Completed", "Cancelled"]),
-                "result": "Pending" if i < 20 else np.random.choice(["Selected", "Rejected", "On Hold"])
-            }
-            interviews.append(interview)
-        
-        return pd.DataFrame(interviews)
-    
     def display(self):
-        """Display complete college admin workflow"""
-        st.header("🏫 College Placement Management System")
+        """Main display method"""
+        st.header("🏫 College Admin Dashboard")
         
-        # Get current step from session state
-        current_step = st.session_state.get('current_step_college', 1)
-        self.current_step = current_step
+        # Display current step
+        self.display_progress_bar()
         
-        # Display step header
-        step_names = {
-            1: "👨‍🎓 Student Database",
-            2: "📊 Analytics Dashboard",
-            3: "🏢 Company Registration",
-            4: "📅 Drive Scheduling",
-            5: "🎯 Student-Company Matching",
-            6: "📝 Interview Management",
-            7: "✅ Placement Records",
-            8: "📈 Performance Reports"
-        }
-        
-        # Create header with progress
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.subheader(f"Step {current_step}: {step_names[current_step]}")
-        with col2:
-            progress = current_step / 8
-            st.progress(progress)
-            st.caption(f"Step {current_step} of 8")
-        
-        # Database status indicator
-        if not st.session_state.demo_mode and st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
-            st.success("✅ Connected to Live Database")
-            # Load data from database
-            self.load_college_data()
-        else:
-            st.warning("⚠️ Running in Demo Mode")
-            # Load sample data for demo
-            self.load_sample_data()
-        
-        # Display appropriate step
-        if current_step == 1:
-            self.step1_student_database()
-        elif current_step == 2:
-            self.step2_analytics_dashboard()
-        elif current_step == 3:
-            self.step3_company_registration()
-        elif current_step == 4:
-            self.step4_drive_scheduling()
-        elif current_step == 5:
-            self.step5_student_company_matching()
-        elif current_step == 6:
-            self.step6_interview_management()
-        elif current_step == 7:
-            self.step7_placement_records()
-        elif current_step == 8:
-            self.step8_performance_reports()
-        
-        # Navigation - Moved to bottom and made more prominent
-        self.display_workflow_navigation(current_step)
+        # Display step content
+        if self.current_step == 1:
+            self.step1_college_profile()
+        elif self.current_step == 2:
+            self.step2_student_management()
+        elif self.current_step == 3:
+            self.step3_placement_tracking()
+        elif self.current_step == 4:
+            self.step4_recruiter_management()
+        elif self.current_step == 5:
+            self.step5_reports_analytics()
     
-    def step1_student_database(self):
-        """Step 1: Student Database Management"""
-        st.info("Manage and view all student records in the college")
+    def step1_college_profile(self):
+        """Step 1: College Profile Setup"""
+        st.subheader("🏫 College Profile Setup")
         
-        # Database info
-        if not st.session_state.demo_mode:
-            college_id = self.get_current_college_id()
-            if college_id:
-                st.info(f"📋 College ID: {college_id}")
-        
-        col1, col2 = st.columns([1, 3])
-        
-        with col1:
-            st.subheader("📋 Student Management")
+        with st.form("college_profile_form"):
+            col1, col2 = st.columns(2)
             
-            # Filters
-            st.write("### Filters")
-            department_filter = st.multiselect(
-                "Select Department",
-                options=self.college_data["students"]["department"].unique() if not self.college_data["students"].empty else [],
-                default=[]
+            with col1:
+                name = st.text_input("College Name*", 
+                                    value=self.college_data["profile"]["name"])
+                address = st.text_area("Address*", 
+                                      value=self.college_data["profile"]["address"],
+                                      height=100)
+                website = st.text_input("Website", 
+                                       value=self.college_data["profile"]["website"])
+            
+            with col2:
+                contact_email = st.text_input("Contact Email*", 
+                                             value=self.college_data["profile"]["contact_email"])
+                contact_phone = st.text_input("Contact Phone*", 
+                                             value=self.college_data["profile"]["contact_phone"])
+                placement_officer = st.text_input("Placement Officer*", 
+                                                 value=self.college_data["profile"]["placement_officer"])
+            
+            # Departments
+            st.subheader("🎓 Departments")
+            department_options = [
+                "Computer Science", "Electronics", "Mechanical", "Civil",
+                "Electrical", "Chemical", "Biotechnology", "Mathematics",
+                "Physics", "Chemistry", "Humanities", "Others"
+            ]
+            
+            selected_departments = st.multiselect(
+                "Select Departments",
+                department_options,
+                default=self.college_data["profile"]["departments"]
             )
             
-            placement_filter = st.selectbox(
-                "Placement Status",
-                options=["All", "Placed", "Not Placed", "Intern"]
-            )
+            # Additional Info
+            col3, col4 = st.columns(2)
+            with col3:
+                accreditation = st.text_input("Accreditation", 
+                                             value=self.college_data["profile"]["accreditation"])
+            with col4:
+                established_year = st.text_input("Established Year", 
+                                                value=self.college_data["profile"]["established_year"])
             
-            cgpa_filter = st.slider(
-                "Minimum CGPA",
-                min_value=0.0,
-                max_value=10.0,
-                value=0.0,
-                step=0.5
-            )
-            
-            # Add new student form
-            st.write("### Add New Student")
-            with st.form("add_student_form"):
-                new_name = st.text_input("Full Name*")
-                new_email = st.text_input("Email*")
-                new_roll = st.text_input("Roll Number*")
-                new_dept = st.selectbox("Department*", 
-                                      options=self.college_data["students"]["department"].unique() if not self.college_data["students"].empty else ["Computer Science"])
-                new_cgpa = st.number_input("CGPA*", min_value=0.0, max_value=10.0, value=7.5)
-                new_year = st.selectbox("Graduation Year*", options=[2023, 2024, 2025])
-                
-                submit = st.form_submit_button("Add Student")
-                
-                if submit:
-                    if new_name and new_email and new_roll and new_dept:
-                        student_data = {
-                            "full_name": new_name,
-                            "email": new_email,
-                            "roll_number": new_roll,
-                            "department": new_dept,
-                            "cgpa": float(new_cgpa),
-                            "graduation_year": new_year,
-                            "college_id": self.get_current_college_id() if not st.session_state.demo_mode else None,
-                            "created_at": datetime.now().isoformat()
-                        }
-                        
-                        success = self.save_to_database('student', student_data)
-                        
-                        if success or st.session_state.demo_mode:
-                            st.success(f"✅ Added student: {new_name}")
-                            if not st.session_state.demo_mode:
-                                st.success("✅ Student saved to database!")
-                                # Refresh data
-                                self.load_college_data()
-                        else:
-                            st.error("❌ Failed to save student to database")
+            if st.form_submit_button("💾 Save College Profile"):
+                # Validate required fields
+                if not all([name, address, contact_email, contact_phone, placement_officer]):
+                    st.error("Please fill in all required fields (*)")
+                else:
+                    # Update college data
+                    self.college_data["profile"].update({
+                        "name": name,
+                        "address": address,
+                        "website": website,
+                        "contact_email": contact_email,
+                        "contact_phone": contact_phone,
+                        "placement_officer": placement_officer,
+                        "departments": selected_departments,
+                        "accreditation": accreditation,
+                        "established_year": established_year
+                    })
+                    
+                    # Try to save to database
+                    save_success = self.save_profile_to_database()
+                    
+                    if save_success:
+                        st.success("✅ College profile saved successfully!")
+                        st.balloons()
                     else:
-                        st.error("Please fill all required fields (*)")
+                        st.info("Profile saved locally (demo mode)")
         
-        with col2:
-            st.subheader("👥 Student Database")
+        # Display college profile summary
+        self.display_college_summary()
+    
+    def step2_student_management(self):
+        """Step 2: Student Management"""
+        st.subheader("👨‍🎓 Student Management")
+        
+        # Bulk upload option
+        st.write("### 📥 Bulk Student Upload")
+        
+        uploaded_file = st.file_uploader("Upload student data (CSV/Excel)", 
+                                        type=['csv', 'xlsx', 'xls'])
+        
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(uploaded_file)
+                
+                st.success(f"✅ Successfully loaded {len(df)} student records")
+                
+                # Show preview
+                with st.expander("Preview Data"):
+                    st.dataframe(df.head(), use_container_width=True)
+                
+                # Process and save data
+                if st.button("📋 Process and Save Student Data"):
+                    with st.spinner("Processing student data..."):
+                        # Convert to list of dictionaries
+                        students_data = df.to_dict('records')
+                        
+                        # Update college data
+                        self.college_data["students"].extend(students_data)
+                        
+                        # Save to database if available
+                        if not self.demo_mode and self.db_manager:
+                            try:
+                                college_id = st.session_state.get('college_id')
+                                if college_id and hasattr(self.db_manager, 'bulk_save_students'):
+                                    success_count = self.db_manager.bulk_save_students(college_id, students_data)
+                                    st.success(f"✅ Saved {success_count} students to database")
+                            except Exception as e:
+                                st.warning(f"Could not save to database: {e}")
+                                st.info("Data saved locally only")
+                        else:
+                            st.info("Data saved locally (demo mode)")
+                        
+                        st.rerun()
+                        
+            except Exception as e:
+                st.error(f"Error reading file: {e}")
+        
+        # Manual student addition
+        st.write("### 👤 Add Student Manually")
+        
+        with st.form("add_student_form"):
+            col1, col2 = st.columns(2)
             
-            if self.college_data["students"].empty:
-                st.info("No student data available")
-                return
+            with col1:
+                student_id = st.text_input("Student ID*")
+                student_name = st.text_input("Full Name*")
+                department = st.selectbox("Department", 
+                                         self.college_data["profile"]["departments"] 
+                                         if self.college_data["profile"]["departments"] 
+                                         else ["Computer Science"])
+            
+            with col2:
+                cgpa = st.number_input("CGPA*", 0.0, 10.0, 7.0, 0.1)
+                email = st.text_input("Email*")
+                status = st.selectbox("Placement Status", 
+                                     ["Placed", "Seeking", "Not Looking", "Higher Studies"])
+            
+            if st.form_submit_button("➕ Add Student"):
+                if not all([student_id, student_name, department, email]):
+                    st.error("Please fill in all required fields (*)")
+                else:
+                    new_student = {
+                        "id": student_id,
+                        "name": student_name,
+                        "department": department,
+                        "cgpa": cgpa,
+                        "email": email,
+                        "status": status
+                    }
+                    
+                    self.college_data["students"].append(new_student)
+                    
+                    # Save to database if available
+                    if not self.demo_mode and self.db_manager:
+                        try:
+                            college_id = st.session_state.get('college_id')
+                            if college_id and hasattr(self.db_manager, 'save_student'):
+                                new_student['college_id'] = college_id
+                                success = self.db_manager.save_student(new_student)
+                                if success:
+                                    st.success("✅ Student saved to database")
+                        except Exception as e:
+                            st.warning(f"Could not save to database: {e}")
+                            st.info("Student saved locally only")
+                    else:
+                        st.info("Student saved locally (demo mode)")
+                    
+                    st.rerun()
+        
+        # Display student list
+        st.write("### 📋 Student Directory")
+        
+        if self.college_data["students"]:
+            # Create dataframe for display
+            students_df = pd.DataFrame(self.college_data["students"])
+            
+            # Search and filter
+            col1, col2 = st.columns(2)
+            with col1:
+                search_name = st.text_input("Search by name", "")
+            with col2:
+                filter_department = st.selectbox("Filter by department", 
+                                                ["All"] + list(students_df['department'].unique()))
             
             # Apply filters
-            filtered_students = self.college_data["students"].copy()
+            filtered_df = students_df.copy()
+            if search_name:
+                filtered_df = filtered_df[filtered_df['name'].str.contains(search_name, case=False, na=False)]
+            if filter_department != "All":
+                filtered_df = filtered_df[filtered_df['department'] == filter_department]
             
-            if department_filter:
-                filtered_students = filtered_students[filtered_students["department"].isin(department_filter)]
+            # Display table
+            st.dataframe(filtered_df, use_container_width=True)
             
-            if placement_filter != "All":
-                filtered_students = filtered_students[filtered_students["placement_status"] == placement_filter]
-            
-            filtered_students = filtered_students[filtered_students["cgpa"] >= cgpa_filter]
-            
-            # Display statistics
-            col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
-            with col_stats1:
-                st.metric("Total Students", len(filtered_students))
-            with col_stats2:
-                placed_count = len(filtered_students[filtered_students["placement_status"] == "Placed"])
-                st.metric("Placed", placed_count)
-            with col_stats3:
-                avg_cgpa = filtered_students["cgpa"].mean() if not filtered_students.empty else 0
-                st.metric("Avg CGPA", f"{avg_cgpa:.2f}")
-            with col_stats4:
-                internships = len(filtered_students[filtered_students["placement_status"] == "Intern"])
-                st.metric("Internships", internships)
-            
-            # Display data table
-            display_cols = ["id", "full_name", "department", "cgpa", "placement_status", "company", "package"]
-            # Use available columns
-            available_cols = [col for col in display_cols if col in filtered_students.columns]
-            
-            st.dataframe(
-                filtered_students[available_cols].sort_values("cgpa", ascending=False),
-                use_container_width=True,
-                height=400
-            )
-            
-            # Export option
-            if st.button("📥 Export Student Data"):
-                csv = filtered_students.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name="student_database.csv",
-                    mime="text/csv"
-                )
+            # Statistics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Students", len(students_df))
+            with col2:
+                placed_count = len(students_df[students_df['status'] == 'Placed'])
+                st.metric("Placed Students", placed_count)
+            with col3:
+                avg_cgpa = students_df['cgpa'].mean() if not students_df.empty else 0
+                st.metric("Average CGPA", f"{avg_cgpa:.2f}")
+        else:
+            st.info("No student data available. Upload or add students to get started.")
     
-    def step2_analytics_dashboard(self):
-        """Step 2: Analytics Dashboard"""
-        st.info("Comprehensive analytics and insights on placement performance")
-        
-        if self.college_data["students"].empty:
-            st.warning("No student data available for analytics")
-            return
-        
-        # Overall statistics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            total_students = len(self.college_data["students"])
-            st.metric("Total Students", total_students)
-        with col2:
-            placed_students = len(self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"])
-            placement_rate = (placed_students / total_students) * 100 if total_students > 0 else 0
-            st.metric("Placement Rate", f"{placement_rate:.1f}%")
-        with col3:
-            placed_df = self.college_data["students"][self.college_data["students"]["placement_status"] == "Placed"]
-            avg_package = placed_df["package"].mean() if not placed_df.empty else 0
-            st.metric("Avg Package (LPA)", f"{avg_package:.2f}" if not pd.isna(avg_package) else "N/A")
-        with col4:
-            active_companies = len(self.college_data["companies"])
-            st.metric("Active Companies", active_companies)
-        
-        # Charts
-        col_chart1, col_chart2 = st.columns(2)
-        
-        with col_chart1:
-            st.subheader("📈 Placement by Department")
-            
-            # Department-wise placement data
-            if not self.college_data["students"].empty:
-                dept_data = self.college_data["students"].groupby("department").agg({
-                    "id": "count",
-                    "placement_status": lambda x: (x == "Placed").sum()
-                }).reset_index()
-                dept_data["placement_rate"] = (dept_data["placement_status"] / dept_data["id"]) * 100
-                
-                fig1 = px.bar(
-                    dept_data,
-                    x="department",
-                    y="placement_rate",
-                    color="department",
-                    title="Placement Rate by Department",
-                    labels={"department": "Department", "placement_rate": "Placement Rate (%)"}
-                )
-                st.plotly_chart(fig1, use_container_width=True)
-        
-        with col_chart2:
-            st.subheader("🏢 Top Hiring Companies")
-            
-            # Company-wise hiring data
-            if not self.college_data["students"].empty:
-                company_counts = self.college_data["students"]["company"].value_counts().head(10)
-                
-                if not company_counts.empty:
-                    fig2 = px.pie(
-                        values=company_counts.values,
-                        names=company_counts.index,
-                        title="Top 10 Hiring Companies",
-                        hole=0.4
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.info("No company hiring data available")
-        
-        # CGPA Distribution
-        st.subheader("📊 CGPA Distribution")
-        if not self.college_data["students"].empty:
-            fig3 = px.histogram(
-                self.college_data["students"],
-                x="cgpa",
-                nbins=20,
-                title="CGPA Distribution of Students",
-                labels={"cgpa": "CGPA", "count": "Number of Students"}
-            )
-            st.plotly_chart(fig3, use_container_width=True)
+   
     
     def step3_company_registration(self):
         """Step 3: Company Registration & Management"""
@@ -1015,6 +779,35 @@ class CollegeFlow:
                 self.generate_department_report()
             else:
                 self.generate_comprehensive_report()
+
+     # Continue with other steps (3, 4, 5)...
+    # (Your existing code for steps 3, 4, 5 remains the same)
+    
+    def display_progress_bar(self):
+        """Display progress bar for current step"""
+        progress = self.current_step / self.total_steps
+        st.progress(progress)
+        st.caption(f"Step {self.current_step} of {self.total_steps}")
+    
+    def display_college_summary(self):
+        """Display college profile summary"""
+        with st.expander("🏫 College Summary", expanded=False):
+            profile = self.college_data["profile"]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Name:** {profile['name']}")
+                st.write(f"**Contact Email:** {profile['contact_email']}")
+                st.write(f"**Contact Phone:** {profile['contact_phone']}")
+                st.write(f"**Website:** {profile['website']}")
+            
+            with col2:
+                st.write(f"**Placement Officer:** {profile['placement_officer']}")
+                st.write(f"**Accreditation:** {profile['accreditation']}")
+                st.write(f"**Established:** {profile['established_year']}")
+            
+            if profile['departments']:
+                st.write(f"**Departments:** {', '.join(profile['departments'])}")
     
     def generate_annual_report(self):
         """Generate annual placement report"""
