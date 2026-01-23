@@ -131,12 +131,14 @@ class RecruiterFlow:
             company_name = st.text_input("Company Name*", 
                                          value=company_profile.get("name", ""))
             
-            industry = st.selectbox("Industry*",
-                ["IT/Software", "Finance/Banking", "Consulting", "Manufacturing",
-                 "E-commerce", "Healthcare", "Education", "Automotive", "Retail", "Telecom"],
-                index=["IT/Software", "Finance/Banking", "Consulting", "Manufacturing",
-                      "E-commerce", "Healthcare", "Education", "Automotive", "Retail", "Telecom"]
-                      .index(company_profile.get("industry", "IT/Software")) if company_profile.get("industry") else 0)
+            industry_options = ["IT/Software", "Finance/Banking", "Consulting", "Manufacturing",
+                              "E-commerce", "Healthcare", "Education", "Automotive", "Retail", "Telecom"]
+            
+            # Find current industry index
+            current_industry = company_profile.get("industry", "IT/Software")
+            industry_index = industry_options.index(current_industry) if current_industry in industry_options else 0
+            
+            industry = st.selectbox("Industry*", industry_options, index=industry_index)
             
             website = st.text_input("Website", value=company_profile.get("website", ""))
             
@@ -227,7 +229,7 @@ class RecruiterFlow:
                 with st.expander(f"📁 {category}"):
                     cat_skills = st.multiselect(f"Select {category} skills:", 
                                                 skills, 
-                                                key=f"skills_{category}")
+                                                key=f"skills_{category}_{random.randint(1000,9999)}")
                     selected_skills.extend(cat_skills)
             
             job_description = st.text_area("Job Description*", height=200,
@@ -454,8 +456,6 @@ Requirements:
                 "Match": has_skill
             })
         
-        skill_df = pd.DataFrame(skill_data)
-        
         # Display skills analysis
         for skill in skill_data:
             col1, col2 = st.columns([3, 1])
@@ -516,6 +516,7 @@ Requirements:
             st.rerun()
         
         if st.button("📅 Schedule Interview →"):
+            st.session_state.selected_interview_candidate = selected_candidate
             st.session_state.recruiter_step = 5
             st.rerun()
     
@@ -531,18 +532,29 @@ Requirements:
             st.button("← Back to AI Screening", on_click=lambda: setattr(st.session_state, 'recruiter_step', 4))
             return
         
+        # Get candidate from session state if available
+        selected_candidate = st.session_state.get('selected_interview_candidate')
+        
         # Schedule new interview
         with st.form("interview_schedule_form"):
             col1, col2 = st.columns(2)
             with col1:
+                # Default to selected candidate if available
+                candidate_options = [f"{c['id']} - {c['name']}" for c in shortlisted]
+                default_candidate = None
+                if selected_candidate and f"{selected_candidate['id']} - {selected_candidate['name']}" in candidate_options:
+                    default_candidate = candidate_options.index(f"{selected_candidate['id']} - {selected_candidate['name']}")
+                
                 candidate = st.selectbox("Select Candidate*",
-                                        [f"{c['id']} - {c['name']}" for c in shortlisted])
+                                        candidate_options,
+                                        index=default_candidate if default_candidate is not None else 0)
+                
                 interview_type = st.selectbox("Interview Type*",
                                             ["Technical Round", "HR Round", "Managerial Round",
                                              "Cultural Fit", "Final Round"])
             with col2:
                 scheduled_date = st.date_input("Interview Date*", datetime.now() + timedelta(days=7))
-                scheduled_time = st.time_input("Interview Time*", datetime.strptime("10:00", "%H:%M"))
+                scheduled_time = st.time_input("Interview Time*", datetime.strptime("10:00", "%H:%M").time())
                 duration = st.selectbox("Duration", ["30 mins", "45 mins", "1 hour", "1.5 hours", "2 hours"])
             
             interviewer = st.text_input("Interviewer Name*", "Tech Lead")
@@ -551,14 +563,14 @@ Requirements:
             
             if st.form_submit_button("📅 Schedule Interview"):
                 candidate_id = candidate.split(" - ")[0]
-                candidate_name = candidate.split(" - ")[1]
                 
-                # Find job candidate applied for
-                applied_job = None
+                # Find candidate details
+                candidate_name = ""
+                applied_job = "JOB001"
                 for cand in self.recruiter_data["candidates"]:
                     if cand["id"] == candidate_id:
-                        applied_job = cand["applied_jobs"][0] if cand["applied_jobs"] else "JOB001"
                         candidate_name = cand["name"]
+                        applied_job = cand["applied_jobs"][0] if cand["applied_jobs"] else "JOB001"
                         break
                 
                 # Get job title
@@ -585,6 +597,12 @@ Requirements:
                     "status": "Scheduled",
                     "feedback": ""
                 })
+                
+                # Update candidate status
+                for cand in self.recruiter_data["candidates"]:
+                    if cand["id"] == candidate_id:
+                        cand["status"] = "Interview Scheduled"
+                        break
                 
                 st.success(f"✅ Interview scheduled! Interview ID: {interview_id}")
         
@@ -621,25 +639,39 @@ Requirements:
         if not selected_interview:
             # Let user select an interview
             scheduled_interviews = [i for i in self.recruiter_data["interviews"] if i["status"] == "Scheduled"]
+            completed_interviews = [i for i in self.recruiter_data["interviews"] if i["status"] == "Completed"]
+            all_interviews = scheduled_interviews + completed_interviews
             
-            if not scheduled_interviews:
-                st.warning("No interviews scheduled for evaluation.")
+            if not all_interviews:
+                st.warning("No interviews available for evaluation.")
                 st.button("← Back to Interview Scheduling", 
                          on_click=lambda: setattr(st.session_state, 'recruiter_step', 5))
                 return
             
-            interview_options = [f"{i['id']} - {i['candidate_name']} ({i['interview_type']})" 
-                               for i in scheduled_interviews]
+            interview_options = [f"{i['id']} - {i['candidate_name']} ({i['interview_type']}) - {i['status']}" 
+                               for i in all_interviews]
             selected_option = st.selectbox("Select Interview for Evaluation:", interview_options)
             
             if selected_option:
                 interview_id = selected_option.split(" - ")[0]
-                selected_interview = next(i for i in scheduled_interviews if i["id"] == interview_id)
+                selected_interview = next(i for i in all_interviews if i["id"] == interview_id)
         
         # Display interview details
         st.info(f"**Evaluating:** {selected_interview['candidate_name']} "
                f"for {selected_interview['job_title']} "
                f"({selected_interview['interview_type']})")
+        
+        # Check if already evaluated
+        if selected_interview.get("feedback") and selected_interview["status"] == "Completed":
+            st.warning("This interview has already been evaluated.")
+            
+            # Show existing feedback
+            with st.expander("View Previous Evaluation"):
+                feedback = selected_interview["feedback"]
+                st.write(f"**Overall Rating:** {feedback.get('overall_rating', 'N/A')}")
+                st.write(f"**Recommendation:** {feedback.get('recommendation', 'N/A')}")
+                st.write(f"**Average Score:** {feedback.get('average_score', 'N/A'):.1f}/10")
+                st.write(f"**Overall Feedback:** {feedback.get('overall_feedback', 'N/A')}")
         
         # Evaluation form
         with st.form("evaluation_form"):
@@ -742,8 +774,8 @@ Requirements:
         with st.form("offer_form"):
             col1, col2 = st.columns(2)
             with col1:
-                candidate = st.selectbox("Select Candidate*",
-                                        [f"{c['id']} - {c['name']}" for c in offer_candidates])
+                candidate_options = [f"{c['id']} - {c['name']}" for c in offer_candidates]
+                candidate = st.selectbox("Select Candidate*", candidate_options)
                 position = st.text_input("Position*", "Software Development Engineer")
             with col2:
                 offered_salary = st.number_input("Offered Salary (LPA)*", 0.0, 100.0, 12.0, 1.0)
@@ -815,6 +847,12 @@ TechCorp Solutions""")
                     "declined_date": None
                 })
                 
+                # Update candidate status
+                for cand in self.recruiter_data["candidates"]:
+                    if cand["id"] == candidate_id:
+                        cand["status"] = "Offer Generated"
+                        break
+                
                 st.success(f"✅ Offer letter generated! Offer ID: {offer_id}")
                 
                 # Download offer letter
@@ -830,9 +868,7 @@ TechCorp Solutions""")
             st.divider()
             st.subheader("📋 Offer Status")
             
-            offers_df = pd.DataFrame(self.recruiter_data["offers"])
-            
-            for idx, offer in offers_df.iterrows():
+            for offer in self.recruiter_data["offers"]:
                 status_color = {
                     "Pending": "orange",
                     "Accepted": "green",
@@ -861,6 +897,11 @@ TechCorp Solutions""")
                                         if o["id"] == offer["id"]:
                                             o["status"] = "Accepted"
                                             o["accepted_date"] = datetime.now().strftime("%Y-%m-%d")
+                                            # Update candidate status
+                                            for cand in self.recruiter_data["candidates"]:
+                                                if cand["id"] == offer["candidate_id"]:
+                                                    cand["status"] = "Hired"
+                                                    break
                                             break
                                     st.rerun()
                             with col_decline:
@@ -869,6 +910,11 @@ TechCorp Solutions""")
                                         if o["id"] == offer["id"]:
                                             o["status"] = "Declined"
                                             o["declined_date"] = datetime.now().strftime("%Y-%m-%d")
+                                            # Update candidate status
+                                            for cand in self.recruiter_data["candidates"]:
+                                                if cand["id"] == offer["candidate_id"]:
+                                                    cand["status"] = "Declined"
+                                                    break
                                             break
                                     st.rerun()
         
@@ -888,18 +934,32 @@ TechCorp Solutions""")
         """Step 8: Hiring Analytics Dashboard"""
         st.subheader("📊 Hiring Analytics Dashboard")
         
+        # Calculate real-time metrics from data
+        total_candidates = len(self.recruiter_data["candidates"])
+        shortlisted_count = len([c for c in self.recruiter_data["candidates"] if c["status"] == "Shortlisted"])
+        interview_scheduled = len([c for c in self.recruiter_data["candidates"] if c["status"] == "Interview Scheduled"])
+        hired_count = len([c for c in self.recruiter_data["candidates"] if c["status"] == "Hired"])
+        
+        # Use calculated or default values
+        analytics = self.recruiter_data["analytics"]
+        total_apps = max(analytics["total_applications"], total_candidates)
+        shortlisted = max(analytics["shortlisted"], shortlisted_count)
+        interviews = max(analytics["interviews"], interview_scheduled)
+        hires = max(analytics["hires"], hired_count)
+        offers = analytics["offers"]
+        
         # Key Metrics
         st.subheader("📈 Key Metrics")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Applications", self.recruiter_data["analytics"]["total_applications"])
+            st.metric("Total Applications", total_apps)
         with col2:
-            st.metric("Shortlisted", self.recruiter_data["analytics"]["shortlisted"])
+            st.metric("Shortlisted", shortlisted)
         with col3:
-            st.metric("Interviews", self.recruiter_data["analytics"]["interviews"])
+            st.metric("Interviews", interviews)
         with col4:
-            st.metric("Hires", self.recruiter_data["analytics"]["hires"])
+            st.metric("Hires", hires)
         
         # Charts
         col1, col2 = st.columns(2)
@@ -910,13 +970,7 @@ TechCorp Solutions""")
             
             funnel_data = pd.DataFrame({
                 'Stage': ['Applications', 'Shortlisted', 'Interviews', 'Offers', 'Hires'],
-                'Count': [
-                    self.recruiter_data["analytics"]["total_applications"],
-                    self.recruiter_data["analytics"]["shortlisted"],
-                    self.recruiter_data["analytics"]["interviews"],
-                    self.recruiter_data["analytics"]["offers"],
-                    self.recruiter_data["analytics"]["hires"]
-                ]
+                'Count': [total_apps, shortlisted, interviews, offers, hires]
             })
             
             fig = px.funnel(funnel_data, x='Count', y='Stage', title='Hiring Funnel')
@@ -948,15 +1002,41 @@ TechCorp Solutions""")
         # Skill Gap Analysis
         st.subheader("🛠️ Top Required Skills vs Available Skills")
         
-        skill_data = pd.DataFrame({
-            'Skill': ['Python', 'Java', 'SQL', 'Communication', 'Problem Solving'],
-            'Required': [85, 70, 80, 90, 85],
-            'Available': [75, 65, 70, 80, 75]
-        })
+        # Collect skills from job postings
+        all_job_skills = []
+        for job in self.recruiter_data["job_postings"]:
+            all_job_skills.extend(job["requirements"].get("skills", []))
+        
+        # Collect skills from candidates
+        all_candidate_skills = []
+        for candidate in self.recruiter_data["candidates"]:
+            all_candidate_skills.extend(candidate.get("skills", []))
+        
+        # Count frequencies
+        from collections import Counter
+        job_skill_counts = Counter(all_job_skills)
+        candidate_skill_counts = Counter(all_candidate_skills)
+        
+        # Get top 5 skills
+        top_skills = list(job_skill_counts.keys())[:5]
+        
+        skill_data = {
+            'Skill': top_skills,
+            'Required': [100] * len(top_skills),  # All required skills are 100%
+            'Available': []
+        }
+        
+        for skill in top_skills:
+            # Calculate percentage of candidates with this skill
+            candidates_with_skill = sum(1 for c in self.recruiter_data["candidates"] if skill in c.get("skills", []))
+            percentage = (candidates_with_skill / max(1, len(self.recruiter_data["candidates"]))) * 100
+            skill_data['Available'].append(percentage)
+        
+        skill_df = pd.DataFrame(skill_data)
         
         fig = go.Figure(data=[
-            go.Bar(name='Required %', x=skill_data['Skill'], y=skill_data['Required']),
-            go.Bar(name='Available %', x=skill_data['Skill'], y=skill_data['Available'])
+            go.Bar(name='Required %', x=skill_df['Skill'], y=skill_df['Required']),
+            go.Bar(name='Available %', x=skill_df['Skill'], y=skill_df['Available'])
         ])
         fig.update_layout(barmode='group', title='Skill Gap Analysis')
         st.plotly_chart(fig, use_container_width=True)
