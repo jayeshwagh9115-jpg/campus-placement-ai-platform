@@ -23,6 +23,7 @@ st.set_page_config(
 )
 
 # Add this function at the top
+# Update the check_database_status function
 def check_database_status():
     """Check and display database connection status"""
     if 'db_manager' not in st.session_state:
@@ -35,48 +36,42 @@ def check_database_status():
     
     if db.is_connected:
         try:
-            # Test with actual query
-            test_data = db.get_students(limit=1)
+            # Use the correct method (no limit parameter)
+            test_data = db.get_all_students()  # Changed from get_students(limit=1)
             return f"✅ Connected | Students: {len(test_data)}"
         except Exception as e:
             return f"⚠️ Connected but query failed: {str(e)[:50]}"
     else:
         return "❌ Not connected"
 
-# Update the sidebar to show DB status
-with st.sidebar:
-    st.divider()
-    st.caption("Database Status")
-    
-    if st.session_state.get('db_manager'):
-        status_text = check_database_status()
-        if "✅" in status_text:
-            st.success(status_text)
-        elif "⚠️" in status_text:
-            st.warning(status_text)
+# Update the debug button section
+if st.button("🔧 Debug Database", type="secondary"):
+    with st.expander("Debug Info", expanded=True):
+        db = st.session_state.get('db_manager')
+        if db:
+            st.write("**Connection Status:**", "✅ Connected" if db.is_connected else "❌ Not Connected")
+            st.write("**URL:**", db.url)
+            
+            # Run connection test
+            if st.button("Run Full Connection Test"):
+                with st.spinner("Testing connection..."):
+                    status = db.test_connection()
+                    
+                    st.write("**Table Status:**")
+                    for table, info in status['tables'].items():
+                        if info['accessible']:
+                            st.success(f"{table}: {info['count']} records")
+                        else:
+                            st.error(f"{table}: {info.get('error', 'Inaccessible')}")
+                    
+                    # Show sample data
+                    if status['sample_data']:
+                        st.write("**Sample Data:**")
+                        for table, sample in status['sample_data'].items():
+                            with st.expander(f"Sample from {table}"):
+                                st.json(sample)
         else:
-            st.error(status_text)
-    
-    # Add debug button
-    if st.button("🔧 Debug Database", type="secondary"):
-        with st.expander("Debug Info", expanded=True):
-            db = st.session_state.get('db_manager')
-            if db:
-                st.write("URL:", db.url)
-                st.write("Key available:", "Yes" if db.key else "No")
-                st.write("Connected:", db.is_connected)
-                
-                # Test query
-                if st.button("Test Query"):
-                    try:
-                        students = db.get_students(limit=3)
-                        st.write(f"Students found: {len(students)}")
-                        if students:
-                            st.json(students[0])
-                    except Exception as e:
-                        st.error(f"Query failed: {e}")
-            else:
-                st.error("No database manager")
+            st.error("No database manager initialized")
 
 
 # Initialize session state and database
