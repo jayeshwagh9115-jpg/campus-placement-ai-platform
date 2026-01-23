@@ -1,6 +1,58 @@
 import streamlit as st
 import pandas as pd
 import traceback
+# TEMPORARY DEBUG FIX - Add this near the top
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+def debug_database_save():
+    """Debug function to test database save"""
+    if st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+        db = st.session_state.db_manager
+        
+        # Simple test data
+        test_data = {
+            "full_name": "Debug Test",
+            "email": f"debug{random.randint(1000, 9999)}@test.com",
+            "roll_number": f"DEBUG{random.randint(1000, 9999)}",
+            "department": "Test"
+        }
+        
+        try:
+            # Try different methods
+            st.write("**Testing save methods:**")
+            
+            # Method 1: Direct insert
+            st.write("1. Direct insert:")
+            result1 = db.insert('students', test_data)
+            st.write(f"   Result: {result1}")
+            
+            # Method 2: Using client directly
+            st.write("2. Using client directly:")
+            try:
+                result2 = db.client.table('students').insert(test_data).execute()
+                st.write(f"   Result: {result2.data if result2.data else 'No data'}")
+            except Exception as e:
+                st.write(f"   Error: {e}")
+            
+            # Method 3: Raw request
+            st.write("3. Raw HTTP request:")
+            import requests
+            headers = {
+                "apikey": db.key,
+                "Authorization": f"Bearer {db.key}",
+                "Content-Type": "application/json"
+            }
+            response = requests.post(
+                f"{db.url}/rest/v1/students",
+                json=test_data,
+                headers=headers
+            )
+            st.write(f"   Status: {response.status_code}")
+            st.write(f"   Response: {response.text[:200]}")
+            
+        except Exception as e:
+            st.error(f"Debug error: {e}")
 
 # Try to import database modules with fallbacks
 try:
