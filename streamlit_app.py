@@ -135,6 +135,7 @@ with st.sidebar:
     
     # Show workflow based on selected role
     if st.session_state.selected_role == "👨‍🎓 Student":
+        # Pass database manager to workflow manager
         st.session_state.workflow_manager.display_student_workflow()
     elif st.session_state.selected_role == "🏫 College Admin":
         st.session_state.workflow_manager.display_college_workflow()
@@ -188,12 +189,15 @@ if st.session_state.selected_role == "👨‍🎓 Student":
     # Get current step from session state
     current_step = st.session_state.current_step_student
     
-    # Make sure student_flow has database manager
+    # Pass database manager to student flow USING THE NEW METHOD
     if not st.session_state.demo_mode and st.session_state.get('db_manager'):
-        st.session_state.student_flow.db_manager = st.session_state.db_manager
+        # Use the set_database_manager method instead of setting attributes directly
+        st.session_state.student_flow.set_database_manager(
+            st.session_state.db_manager, 
+            st.session_state.demo_mode
+        )
     else:
-        st.session_state.student_flow.db_manager = None
-        st.session_state.student_flow.demo_mode = True
+        st.session_state.student_flow.set_database_manager(None, True)
     
     st.session_state.student_flow.current_step = current_step
     st.session_state.student_flow.display()
@@ -202,17 +206,38 @@ elif st.session_state.selected_role == "🏫 College Admin":
     # Get current step from session state
     current_step = st.session_state.current_step_college
     
-    # Make sure college_flow has database manager
+    # Pass database manager to college flow USING THE NEW METHOD
     if not st.session_state.demo_mode and st.session_state.get('db_manager'):
-        st.session_state.college_flow.db_manager = st.session_state.db_manager
+        st.session_state.college_flow.set_database_manager(
+            st.session_state.db_manager,
+            st.session_state.demo_mode
+        )
     else:
-        st.session_state.college_flow.db_manager = None
-        st.session_state.college_flow.demo_mode = True
+        st.session_state.college_flow.set_database_manager(None, True)
     
     st.session_state.college_flow.current_step = current_step
     st.session_state.college_flow.display()
     
 elif st.session_state.selected_role == "💼 Recruiter":
+    # For recruiter flow, we need to handle database differently
+    if not st.session_state.demo_mode and st.session_state.get('db_manager'):
+        # Check if recruiter_flow has the set_database_manager method
+        if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
+            st.session_state.recruiter_flow.set_database_manager(
+                st.session_state.db_manager,
+                st.session_state.demo_mode
+            )
+        else:
+            # Fallback for old recruiter_flow
+            st.session_state.recruiter_flow.db_manager = st.session_state.db_manager
+            st.session_state.recruiter_flow.demo_mode = st.session_state.demo_mode
+    else:
+        if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
+            st.session_state.recruiter_flow.set_database_manager(None, True)
+        else:
+            st.session_state.recruiter_flow.db_manager = None
+            st.session_state.recruiter_flow.demo_mode = True
+    
     # Display recruiter flow with current step
     st.session_state.recruiter_flow.display(st.session_state.recruiter_step)
     
@@ -255,6 +280,16 @@ elif st.session_state.selected_role == "👀 Observer":
                 company_name = job.get('company_name', 'Company')
                 if isinstance(company_name, dict):
                     company_name = company_name.get('name', 'Company')
+                else:
+                    # Try to get company name from companies table
+                    try:
+                        company_id = job.get('company_id')
+                        if company_id:
+                            companies = db.select('companies', {'id': company_id}, limit=1)
+                            if companies:
+                                company_name = companies[0].get('name', 'Company')
+                    except:
+                        pass
                 
                 activities_data.append({
                     "Time": job.get('created_at', 'N/A'),
@@ -267,10 +302,30 @@ elif st.session_state.selected_role == "👀 Observer":
                 student_name = app.get('student_name', 'Student')
                 if isinstance(student_name, dict):
                     student_name = student_name.get('full_name', 'Student')
+                else:
+                    # Try to get student name from students table
+                    try:
+                        student_id = app.get('student_id')
+                        if student_id:
+                            students = db.select('students', {'id': student_id}, limit=1)
+                            if students:
+                                student_name = students[0].get('full_name', 'Student')
+                    except:
+                        pass
                 
                 job_title = app.get('job_title', 'Position')
                 if isinstance(job_title, dict):
                     job_title = job_title.get('title', 'Position')
+                else:
+                    # Try to get job title from job_postings table
+                    try:
+                        job_id = app.get('job_id')
+                        if job_id:
+                            jobs = db.select('job_postings', {'id': job_id}, limit=1)
+                            if jobs:
+                                job_title = jobs[0].get('title', 'Position')
+                    except:
+                        pass
                 
                 activities_data.append({
                     "Time": app.get('applied_at', 'N/A'),
@@ -282,7 +337,8 @@ elif st.session_state.selected_role == "👀 Observer":
             # Sort by time and display
             if activities_data:
                 df_activities = pd.DataFrame(activities_data)
-                df_activities = df_activities.sort_values('Time', ascending=False)
+                if 'Time' in df_activities.columns:
+                    df_activities = df_activities.sort_values('Time', ascending=False)
                 st.dataframe(df_activities[['Time', 'Activity', 'Type', 'Status']], 
                             use_container_width=True, 
                             hide_index=True)
@@ -301,48 +357,65 @@ elif st.session_state.selected_role == "👀 Observer":
                     students = db.get_all_students()[:10] if hasattr(db, 'get_all_students') else []
                     if students:
                         df_students = pd.DataFrame(students)
-                        st.dataframe(df_students[['full_name', 'email', 'department', 'cgpa']], 
-                                    use_container_width=True)
+                        # Select only columns that exist
+                        available_cols = [col for col in ['full_name', 'email', 'department', 'cgpa'] if col in df_students.columns]
+                        if available_cols:
+                            st.dataframe(df_students[available_cols], 
+                                        use_container_width=True)
+                        else:
+                            st.dataframe(df_students.head(), use_container_width=True)
                     else:
                         st.info("No students in database")
                 except Exception as e:
-                    st.error(f"Error loading students: {str(e)[:50]}")
+                    st.error(f"Error loading students: {str(e)[:100]}")
             
             with tab2:
                 try:
                     companies = db.get_companies()[:10] if hasattr(db, 'get_companies') else []
                     if companies:
                         df_companies = pd.DataFrame(companies)
-                        st.dataframe(df_companies[['name', 'email', 'industry', 'size']], 
-                                    use_container_width=True)
+                        available_cols = [col for col in ['name', 'email', 'industry', 'size'] if col in df_companies.columns]
+                        if available_cols:
+                            st.dataframe(df_companies[available_cols], 
+                                        use_container_width=True)
+                        else:
+                            st.dataframe(df_companies.head(), use_container_width=True)
                     else:
                         st.info("No companies in database")
                 except Exception as e:
-                    st.error(f"Error loading companies: {str(e)[:50]}")
+                    st.error(f"Error loading companies: {str(e)[:100]}")
             
             with tab3:
                 try:
                     jobs = db.get_all_jobs()[:10] if hasattr(db, 'get_all_jobs') else []
                     if jobs:
                         df_jobs = pd.DataFrame(jobs)
-                        st.dataframe(df_jobs[['title', 'location', 'job_type', 'status']], 
-                                    use_container_width=True)
+                        available_cols = [col for col in ['title', 'location', 'job_type', 'status'] if col in df_jobs.columns]
+                        if available_cols:
+                            st.dataframe(df_jobs[available_cols], 
+                                        use_container_width=True)
+                        else:
+                            st.dataframe(df_jobs.head(), use_container_width=True)
                     else:
                         st.info("No jobs in database")
                 except Exception as e:
-                    st.error(f"Error loading jobs: {str(e)[:50]}")
+                    st.error(f"Error loading jobs: {str(e)[:100]}")
             
             with tab4:
                 try:
                     applications = db.get_all_applications()[:10] if hasattr(db, 'get_all_applications') else []
                     if applications:
                         df_apps = pd.DataFrame(applications)
-                        st.dataframe(df_apps[['applied_at', 'status']], 
-                                    use_container_width=True)
+                        available_cols = [col for col in ['applied_at', 'status'] if col in df_apps.columns]
+                        if available_cols:
+                            st.dataframe(df_apps[available_cols], 
+                                        use_container_width=True)
+                        else:
+                            st.dataframe(df_apps.head(), use_container_width=True)
                     else:
                         st.info("No applications in database")
                 except Exception as e:
-                    st.error(f"Error loading applications: {str(e)[:50]}")
+                    st.error(f"Error loading applications: {str(e)[:100]}")
                     
         except Exception as e:
             st.error(f"Error loading dashboard data: {str(e)}")
@@ -414,8 +487,49 @@ with st.expander("🔧 Debug Information", expanded=False):
     if st.session_state.get('db_manager'):
         st.write(f"- DB Manager exists: Yes")
         st.write(f"- DB Connected: {hasattr(st.session_state.db_manager, 'is_connected') and st.session_state.db_manager.is_connected}")
-    else:
-        st.write("- DB Manager exists: No")
+    
+    # Test database methods
+    if st.button("Test Database Connection"):
+        if st.session_state.get('db_manager'):
+            db = st.session_state.db_manager
+            st.write("**Testing Database Methods:**")
+            
+            # Test basic operations
+            try:
+                # Test get_students
+                students = db.get_students()
+                st.write(f"- get_students(): {len(students)} records")
+                
+                # Test get_companies
+                companies = db.get_companies()
+                st.write(f"- get_companies(): {len(companies)} records")
+                
+                # Test get_jobs
+                jobs = db.get_jobs()
+                st.write(f"- get_jobs(): {len(jobs)} records")
+                
+                # Test get_applications
+                applications = db.get_applications()
+                st.write(f"- get_applications(): {len(applications)} records")
+                
+            except Exception as e:
+                st.error(f"Test failed: {e}")
+
+# Add database initialization check
+if not st.session_state.demo_mode and st.session_state.get('db_manager') and not st.session_state.db_manager.is_connected:
+    st.error("""
+    ⚠️ **Database Connection Issue**
+    
+    The app is trying to connect to the database but failed. Here are some things to check:
+    
+    1. **Internet Connection**: Make sure you're connected to the internet
+    2. **Supabase URL & Key**: Verify they are correct in supabase_manager.py
+    3. **Supabase Project**: Make sure your Supabase project is active
+    4. **Table Permissions**: Check if tables have proper RLS policies
+    5. **Firewall**: Ensure no firewall is blocking the connection
+    
+    The app will run in **Demo Mode** with sample data.
+    """)
 
 # Footer
 st.divider()
