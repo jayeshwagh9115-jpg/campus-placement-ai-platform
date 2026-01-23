@@ -144,17 +144,57 @@ class SupabaseManager:
             return False
     
     # ---------- STUDENT METHODS ----------
-    def save_student_profile(self, student_data: Dict) -> bool:
+    def save_student_profile(self, student_data):
         """Save student profile to database"""
+        print(f"🔍 DEBUG save_student_profile called with data keys: {list(student_data.keys())}")
+    
+        if not self.is_connected:
+            print("❌ Not connected to database")
+            return False
+    
         try:
-            # Add timestamp if not present
-            if 'created_at' not in student_data:
-                student_data['created_at'] = datetime.now().isoformat()
-            
-            result = self.upsert('students', student_data, on_conflict='email')
-            return result is not None
+            # Ensure required fields
+            required_fields = ['full_name', 'email', 'roll_number']
+            for field in required_fields:
+                if field not in student_data:
+                    print(f"❌ Missing required field: {field}")
+                    return False
+        
+            # Try multiple approaches
+            print("💾 Attempt 1: Using upsert...")
+            try:
+                result = self.upsert('students', student_data, on_conflict='email')
+                if result:
+                    print(f"✅ Upsert successful: {result.get('id')}")
+                    return True
+            except Exception as e1:
+                print(f"❌ Upsert failed: {e1}")
+        
+            print("💾 Attempt 2: Using insert...")
+            try:
+                result = self.insert('students', student_data)
+                if result:
+                    print(f"✅ Insert successful: {result.get('id')}")
+                    return True
+            except Exception as e2:
+                print(f"❌ Insert failed: {e2}")
+        
+            print("💾 Attempt 3: Using client directly...")
+            try:
+                response = self.client.table('students').insert(student_data).execute()
+                if response.data and len(response.data) > 0:
+                    print(f"✅ Direct client insert successful: {response.data[0].get('id')}")
+                    return True
+            except Exception as e3:
+                print(f"❌ Direct client insert failed: {e3}")
+        
+            print("❌ All save attempts failed")
+            return False
+        
         except Exception as e:
-            print(f"Error saving student profile: {e}")
+            print(f"❌ Exception in save_student_profile: {e}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
             return False
     
     def get_student_profile(self, email: str) -> Optional[Dict]:
