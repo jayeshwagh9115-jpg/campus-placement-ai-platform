@@ -132,9 +132,31 @@ if not DB_AVAILABLE:
     """)
 
 # Sidebar
+# In the sidebar section, add:
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=100)
     st.title("Platform Navigation")
+    
+    # Database status indicator
+    if st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+        st.success("✅ Live Database")
+        
+        # Quick stats
+        try:
+            stats = st.session_state.db_manager.get_dashboard_stats()
+            with st.expander("📊 Quick Stats"):
+                st.write(f"👨‍🎓 Students: {stats.get('total_students', 0)}")
+                st.write(f"💼 Companies: {stats.get('total_companies', 0)}")
+                st.write(f"📋 Active Jobs: {stats.get('active_jobs', 0)}")
+                st.write(f"📄 Applications: {stats.get('total_applications', 0)}")
+        except:
+            pass
+    else:
+        st.warning("⚠️ Demo Mode")
+    
+    st.divider()
+    
+    # Rest of your sidebar code...
     
     # Demo mode info
     if st.session_state.demo_mode:
@@ -233,31 +255,145 @@ elif st.session_state.selected_role == "👀 Observer":
     st.header("📊 Observer Dashboard")
     st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Students", "1,250")
-    with col2:
-        st.metric("Active Jobs", "45")
-    with col3:
-        st.metric("Companies", "32")
-    
-    st.divider()
-    
-    # Recent activities
-    st.subheader("Recent Activities")
-    activities = pd.DataFrame({
-        "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
-        "Activity": [
-            "TechCorp Solutions posted new job: Frontend Developer",
-            "John Doe (Student) applied for Software Engineer position",
-            "IIT Bombay uploaded 250 student records",
-            "5 interviews scheduled for Amazon positions",
-            "Microsoft extended offers to 3 candidates"
-        ],
-        "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
-    })
-    
-    st.dataframe(activities, use_container_width=True, hide_index=True)
+    # Get real data from database
+    if not st.session_state.demo_mode and st.session_state.db_manager and st.session_state.db_manager.is_connected:
+        db = st.session_state.db_manager
+        
+        # Get statistics
+        stats = db.get_dashboard_stats()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Students", stats.get('total_students', 0))
+        with col2:
+            st.metric("Active Jobs", stats.get('active_jobs', 0))
+        with col3:
+            st.metric("Companies", stats.get('total_companies', 0))
+        with col4:
+            st.metric("Applications", stats.get('total_applications', 0))
+        
+        st.divider()
+        
+        # Recent Activities
+        st.subheader("📈 Recent Activities")
+        
+        # Get recent jobs and applications
+        recent_jobs = db.get_jobs()[:5]
+        recent_apps = db.get_all_applications()[:5]
+        
+        # Combine activities
+        activities_data = []
+        
+        for job in recent_jobs:
+            company_name = job.get('company_name', 'Company')
+            if isinstance(company_name, dict):
+                company_name = company_name.get('name', 'Company')
+            
+            activities_data.append({
+                "Time": job.get('created_at', 'N/A'),
+                "Activity": f"{company_name} posted: {job.get('title', 'Job')}",
+                "Type": "Job Posting",
+                "Status": job.get('status', 'open')
+            })
+        
+        for app in recent_apps:
+            student_name = app.get('student_name', 'Student')
+            if isinstance(student_name, dict):
+                student_name = student_name.get('full_name', 'Student')
+            
+            job_title = app.get('job_title', 'Position')
+            if isinstance(job_title, dict):
+                job_title = job_title.get('title', 'Position')
+            
+            activities_data.append({
+                "Time": app.get('applied_at', 'N/A'),
+                "Activity": f"{student_name} applied for {job_title}",
+                "Type": "Application",
+                "Status": app.get('status', 'pending')
+            })
+        
+        # Sort by time and display
+        if activities_data:
+            df_activities = pd.DataFrame(activities_data)
+            df_activities = df_activities.sort_values('Time', ascending=False)
+            st.dataframe(df_activities[['Time', 'Activity', 'Type', 'Status']], 
+                        use_container_width=True, 
+                        hide_index=True)
+        else:
+            st.info("No recent activities found.")
+        
+        st.divider()
+        
+        # Data Tables Preview
+        st.subheader("📋 Data Preview")
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["Students", "Companies", "Jobs", "Applications"])
+        
+        with tab1:
+            students = db.get_all_students()[:10]
+            if students:
+                df_students = pd.DataFrame(students)
+                st.dataframe(df_students[['full_name', 'email', 'department', 'cgpa']], 
+                            use_container_width=True)
+            else:
+                st.info("No students in database")
+        
+        with tab2:
+            companies = db.get_companies()[:10]
+            if companies:
+                df_companies = pd.DataFrame(companies)
+                st.dataframe(df_companies[['name', 'email', 'industry', 'size']], 
+                            use_container_width=True)
+            else:
+                st.info("No companies in database")
+        
+        with tab3:
+            jobs = db.get_all_jobs()[:10]
+            if jobs:
+                df_jobs = pd.DataFrame(jobs)
+                st.dataframe(df_jobs[['title', 'location', 'job_type', 'status']], 
+                            use_container_width=True)
+            else:
+                st.info("No jobs in database")
+        
+        with tab4:
+            applications = db.get_all_applications()[:10]
+            if applications:
+                df_apps = pd.DataFrame(applications)
+                st.dataframe(df_apps[['applied_at', 'status']], 
+                            use_container_width=True)
+            else:
+                st.info("No applications in database")
+                
+    else:
+        # Demo mode data
+        st.warning("⚠️ Running in Demo Mode - Showing sample data")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Students", "1,250")
+        with col2:
+            st.metric("Active Jobs", "45")
+        with col3:
+            st.metric("Companies", "32")
+        
+        st.divider()
+        
+        # Recent activities (demo)
+        st.subheader("Recent Activities")
+        activities = pd.DataFrame({
+            "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
+            "Activity": [
+                "TechCorp Solutions posted new job: Frontend Developer",
+                "John Doe (Student) applied for Software Engineer position",
+                "IIT Bombay uploaded 250 student records",
+                "5 interviews scheduled for Amazon positions",
+                "Microsoft extended offers to 3 candidates"
+            ],
+            "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
+        })
+        
+        st.dataframe(activities, use_container_width=True, hide_index=True)
 
 # Footer
 st.divider()
