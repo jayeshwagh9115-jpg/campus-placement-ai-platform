@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+from typing import Dict, List, Optional
 
 class StudentFlow:
     def __init__(self):
@@ -20,6 +21,163 @@ class StudentFlow:
             "interviews": [],
             "placement_status": {}
         }
+    
+    # ==================== DATABASE METHODS ====================
+    
+    def save_to_database(self, data_type: str, data: Dict) -> bool:
+        """Save data to Supabase database"""
+        if st.session_state.demo_mode:
+            return False  # Will save to session state instead
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return False
+        
+        try:
+            if data_type == 'student_profile':
+                result = db.create_student(data)
+            elif data_type == 'student_resume':
+                # Store resume in student record
+                student_id = self.get_current_student_id()
+                if student_id:
+                    result = db.update('students', student_id, {'resume_data': data})
+                else:
+                    return False
+            elif data_type == 'application':
+                result = db.create_application(data)
+            elif data_type == 'interview':
+                result = db.insert('interviews', data)
+            else:
+                return False
+            
+            return result is not None
+        except Exception as e:
+            st.error(f"Database error: {e}")
+            return False
+    
+    def get_current_student_id(self) -> Optional[str]:
+        """Get current student's ID from database"""
+        if st.session_state.demo_mode:
+            return None
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return None
+        
+        try:
+            # Try to find student by email from session state
+            if 'student_email' in st.session_state:
+                students = db.get_students()
+                student = next((s for s in students if s.get('email') == st.session_state.student_email), None)
+                return student.get('id') if student else None
+        except:
+            return None
+        return None
+    
+    def get_student_from_db(self, email: str) -> Optional[Dict]:
+        """Get student data from database"""
+        if st.session_state.demo_mode:
+            return None
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return None
+        
+        try:
+            students = db.get_students()
+            return next((s for s in students if s.get('email') == email), None)
+        except:
+            return None
+    
+    def save_student_profile_to_db(self, profile_data: Dict) -> bool:
+        """Save student profile to database"""
+        if st.session_state.demo_mode:
+            # Save to session state for demo
+            if 'students' not in st.session_state:
+                st.session_state.students = []
+            st.session_state.students.append(profile_data)
+            return True
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return False
+        
+        try:
+            # Check if student already exists
+            existing = self.get_student_from_db(profile_data.get('email'))
+            if existing:
+                # Update existing record
+                result = db.update('students', existing['id'], profile_data)
+            else:
+                # Create new record
+                result = db.create_student(profile_data)
+            
+            return result is not None
+        except Exception as e:
+            st.error(f"Error saving profile: {e}")
+            return False
+    
+    def get_available_jobs_from_db(self) -> List[Dict]:
+        """Get available jobs from database"""
+        if st.session_state.demo_mode:
+            return []
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return []
+        
+        try:
+            return db.get_jobs()
+        except:
+            return []
+    
+    def apply_to_job(self, job_id: str, cover_letter: str = "") -> bool:
+        """Apply to a job"""
+        if st.session_state.demo_mode:
+            return True
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return False
+        
+        try:
+            student_id = self.get_current_student_id()
+            if not student_id:
+                st.error("Student profile not found. Please complete your profile first.")
+                return False
+            
+            application_data = {
+                'student_id': student_id,
+                'job_id': job_id,
+                'status': 'pending',
+                'applied_at': datetime.now().isoformat(),
+                'cover_letter': cover_letter
+            }
+            
+            result = db.create_application(application_data)
+            return result is not None
+        except Exception as e:
+            st.error(f"Error applying to job: {e}")
+            return False
+    
+    def get_student_applications(self) -> List[Dict]:
+        """Get applications for current student"""
+        if st.session_state.demo_mode:
+            return []
+        
+        db = st.session_state.get('db_manager')
+        if not db or not db.is_connected:
+            return []
+        
+        try:
+            student_id = self.get_current_student_id()
+            if student_id:
+                return db.get_applications(student_id=student_id)
+            return []
+        except:
+            return []
+    
+    # ==================== DISPLAY METHODS ====================
     
     def display(self):
         """Display complete student workflow"""
@@ -49,6 +207,10 @@ class StudentFlow:
             progress = current_step / 8
             st.progress(progress)
             st.caption(f"Step {current_step} of 8")
+        
+        # Display database status
+        if not st.session_state.demo_mode and st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+            st.success("✅ Connected to Live Database")
         
         # Display appropriate step
         if current_step == 1:
@@ -106,26 +268,39 @@ class StudentFlow:
                  "Research", "Consulting", "Entrepreneurship", "Higher Studies"])
             
             if st.form_submit_button("✅ Save Profile & Continue", width='stretch'):
-                # Save profile data
-                self.student_data["profile"] = {
-                    "name": name,
-                    "roll_no": roll_no,
+                # Prepare profile data
+                profile_data = {
+                    "full_name": name,
+                    "roll_number": roll_no,
                     "email": email,
                     "phone": phone,
                     "department": department,
                     "semester": semester,
-                    "cgpa": cgpa,
+                    "cgpa": float(cgpa),
                     "backlogs": backlogs,
-                    "technical_skills": technical_skills,
-                    "career_interests": career_interests,
-                    "created_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "skills": technical_skills,
+                    "interests": career_interests,
+                    "created_at": datetime.now().isoformat()
                 }
                 
-                st.success("Profile created successfully! Moving to Resume Building...")
-                st.balloons()
-                # Update workflow step
-                st.session_state.current_step_student = 2
-                st.rerun()
+                # Save to database
+                success = self.save_student_profile_to_db(profile_data)
+                
+                if success or st.session_state.demo_mode:
+                    # Save to session state
+                    self.student_data["profile"] = profile_data
+                    st.session_state.student_email = email  # Store email for future reference
+                    
+                    st.success("✅ Profile created successfully!")
+                    if not st.session_state.demo_mode:
+                        st.success("✅ Profile saved to database!")
+                    st.balloons()
+                    
+                    # Update workflow step
+                    st.session_state.current_step_student = 2
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to save profile to database. Please try again.")
     
     def step2_resume_building(self):
         """Step 2: AI Resume Building"""
@@ -137,13 +312,16 @@ class StudentFlow:
                 profile = self.student_data["profile"]
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.write(f"**Name:** {profile['name']}")
-                    st.write(f"**Roll No:** {profile['roll_no']}")
-                    st.write(f"**Department:** {profile['department']}")
+                    st.write(f"**Name:** {profile.get('full_name', 'N/A')}")
+                    st.write(f"**Roll No:** {profile.get('roll_number', 'N/A')}")
+                    st.write(f"**Department:** {profile.get('department', 'N/A')}")
                 with col2:
-                    st.write(f"**CGPA:** {profile['cgpa']}")
-                    st.write(f"**Skills:** {', '.join(profile['technical_skills'][:3])}")
-                    st.write(f"**Interests:** {', '.join(profile['career_interests'])}")
+                    st.write(f"**CGPA:** {profile.get('cgpa', 'N/A')}")
+                    skills = profile.get('skills', [])
+                    if isinstance(skills, list):
+                        st.write(f"**Skills:** {', '.join(skills[:3])}")
+                    else:
+                        st.write(f"**Skills:** {skills}")
         
         # Simple resume builder
         st.subheader("Build Your Resume")
@@ -167,8 +345,13 @@ class StudentFlow:
             skills = st.text_area("Your Skills (comma-separated)", 
                 "Python, Machine Learning, Data Analysis, SQL, Communication")
             
+            # Achievements
+            st.write("**Achievements**")
+            achievements = st.text_area("Achievements and Awards", 
+                "Dean's List, Hackathon Winner, Research Paper Published")
+            
             if st.form_submit_button("💾 Generate Resume Preview", width='stretch'):
-                self.student_data["resume"] = {
+                resume_data = {
                     "education": {
                         "college": college,
                         "degree": degree,
@@ -178,9 +361,23 @@ class StudentFlow:
                     "projects": [
                         {"title": project1, "description": project1_desc}
                     ],
-                    "skills": [s.strip() for s in skills.split(",")]
+                    "skills": [s.strip() for s in skills.split(",")],
+                    "achievements": [a.strip() for a in achievements.split(",")],
+                    "updated_at": datetime.now().isoformat()
                 }
-                st.success("Resume details saved!")
+                
+                # Save to session state
+                self.student_data["resume"] = resume_data
+                
+                # Save to database if not in demo mode
+                if not st.session_state.demo_mode:
+                    db_success = self.save_to_database('student_resume', resume_data)
+                    if db_success:
+                        st.success("✅ Resume saved to database!")
+                    else:
+                        st.error("❌ Failed to save resume to database")
+                else:
+                    st.success("✅ Resume details saved!")
         
         # Show resume preview if data exists
         if self.student_data.get("resume"):
@@ -194,8 +391,8 @@ class StudentFlow:
         
         html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background: white;">
-            <h1 style="color: #2c3e50;">{profile.get('name', 'Your Name')}</h1>
-            <p>{profile.get('email', 'email@example.com')} • {profile.get('phone', 'Phone')}</p>
+            <h1 style="color: #2c3e50;">{profile.get('full_name', 'Your Name')}</h1>
+            <p>{profile.get('email', 'email@example.com')} • {profile.get('phone', 'Phone')} • {profile.get('department', 'Department')}</p>
             
             <h2 style="color: #3498db; border-bottom: 2px solid #3498db;">Education</h2>
             <p><strong>{resume.get('education', {}).get('degree', 'Degree')} in {resume.get('education', {}).get('specialization', 'Specialization')}</strong></p>
@@ -203,6 +400,9 @@ class StudentFlow:
             
             <h2 style="color: #3498db; border-bottom: 2px solid #3498db;">Skills</h2>
             <p>{', '.join(resume.get('skills', ['Skills']))}</p>
+            
+            <h2 style="color: #3498db; border-bottom: 2px solid #3498db;">Projects</h2>
+            <p><strong>{resume.get('projects', [{}])[0].get('title', 'Project Title')}:</strong> {resume.get('projects', [{}])[0].get('description', 'Project Description')}</p>
         </div>
         """
         
@@ -240,19 +440,36 @@ class StudentFlow:
         """Step 4: PM Internship Matching"""
         st.info("Find Product Management internship opportunities")
         
-        # Sample internships
-        internships = [
-            {"company": "Google", "role": "APM Intern", "location": "Bangalore", "match": "85%"},
-            {"company": "Microsoft", "role": "Product Intern", "location": "Hyderabad", "match": "78%"},
-            {"company": "Amazon", "role": "PM Intern", "location": "Mumbai", "match": "72%"}
-        ]
+        # Get jobs from database
+        jobs = self.get_available_jobs_from_db()
         
-        for intern in internships:
-            with st.expander(f"{intern['company']} - {intern['role']} (Match: {intern['match']})"):
-                st.write(f"**Location:** {intern['location']}")
-                st.write(f"**Match Score:** {intern['match']}")
-                if st.button(f"Apply to {intern['company']}", key=f"apply_{intern['company']}", width='stretch'):
-                    st.success(f"Application started for {intern['role']}!")
+        if not jobs and not st.session_state.demo_mode:
+            st.info("No internships available at the moment. Check back later!")
+            return
+        
+        # If no jobs in DB, show sample data
+        if not jobs and st.session_state.demo_mode:
+            jobs = [
+                {"id": "1", "title": "APM Intern", "company": "Google", "location": "Bangalore", "description": "Product Management Internship"},
+                {"id": "2", "title": "Product Intern", "company": "Microsoft", "location": "Hyderabad", "description": "Summer Internship"},
+                {"id": "3", "title": "PM Intern", "company": "Amazon", "location": "Mumbai", "description": "Product Management Role"}
+            ]
+        
+        for job in jobs:
+            with st.expander(f"{job.get('company', 'Company')} - {job.get('title', 'Role')}"):
+                st.write(f"**Location:** {job.get('location', 'N/A')}")
+                st.write(f"**Description:** {job.get('description', 'No description available')}")
+                
+                if st.button(f"Apply to {job.get('company', 'Company')}", key=f"apply_{job.get('id', '0')}", width='stretch'):
+                    # Apply to job
+                    success = self.apply_to_job(job.get('id', ''), f"Application for {job.get('title', '')}")
+                    
+                    if success or st.session_state.demo_mode:
+                        st.success(f"✅ Application started for {job.get('title', 'Role')}!")
+                        if not st.session_state.demo_mode:
+                            st.success("✅ Application saved to database!")
+                    else:
+                        st.error("❌ Failed to submit application")
     
     def step5_career_planning(self):
         """Step 5: Career Path Planning"""
@@ -263,15 +480,23 @@ class StudentFlow:
         st.write("**Recommended Career Paths:**")
         
         # Simple career recommendations
-        if "Software Development" in profile.get("career_interests", []):
-            st.success("**Software Development Engineer**")
-            st.write("Path: Junior Developer → Senior Developer → Tech Lead → Engineering Manager")
-            st.write("Avg Package: 8-15 LPA (Entry) → 30-50+ LPA (Senior)")
+        interests = profile.get('interests', [])
+        if isinstance(interests, str):
+            interests = [interests]
         
-        if "Data Science" in profile.get("career_interests", []):
-            st.info("**Data Scientist**")
-            st.write("Path: Data Analyst → Data Scientist → Senior Data Scientist → Head of Analytics")
-            st.write("Avg Package: 6-12 LPA (Entry) → 25-40+ LPA (Senior)")
+        if "Software Development" in interests or not interests:
+            with st.container():
+                st.success("**Software Development Engineer**")
+                st.write("Path: Junior Developer → Senior Developer → Tech Lead → Engineering Manager")
+                st.write("Avg Package: 8-15 LPA (Entry) → 30-50+ LPA (Senior)")
+                st.progress(0.7)
+        
+        if "Data Science" in interests:
+            with st.container():
+                st.info("**Data Scientist**")
+                st.write("Path: Data Analyst → Data Scientist → Senior Data Scientist → Head of Analytics")
+                st.write("Avg Package: 6-12 LPA (Entry) → 25-40+ LPA (Senior)")
+                st.progress(0.6)
         
         # Career goal setting
         st.subheader("Set Your Career Goals")
@@ -281,7 +506,8 @@ class StudentFlow:
         if st.button("🎯 Save Career Goals", width='stretch'):
             self.student_data["career_plan"] = {
                 "target_role": target_role,
-                "timeline": timeline
+                "timeline": timeline,
+                "set_date": datetime.now().isoformat()
             }
             st.success("Career goals saved!")
     
@@ -296,28 +522,65 @@ class StudentFlow:
         if cgpa >= 8.5:
             probability = "85-95%"
             recommendation = "🎉 Excellent! High chance of placement in top companies"
+            color = "green"
         elif cgpa >= 7.5:
             probability = "70-85%"
             recommendation = "📈 Good potential with proper preparation"
+            color = "blue"
         elif cgpa >= 6.5:
             probability = "50-70%"
             recommendation = "📚 Needs focused effort and skill improvement"
+            color = "orange"
         else:
             probability = "30-50%"
             recommendation = "🎯 Requires immediate action on academics and skills"
+            color = "red"
         
-        st.metric("Placement Probability", probability)
+        # Display metric with color
+        st.markdown(f"""
+        <div style="text-align: center; padding: 20px; border-radius: 10px; background-color: #f8f9fa;">
+            <h1 style="color: {color}; font-size: 48px; margin: 0;">{probability}</h1>
+            <p style="font-size: 18px; margin: 10px 0 0 0;">Placement Probability</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         st.info(recommendation)
         
         # Save prediction
         self.student_data["placement_prediction"] = {
             "probability": probability,
-            "calculated_date": datetime.now().strftime("%Y-%m-%d")
+            "recommendation": recommendation,
+            "calculated_date": datetime.now().isoformat()
         }
+        
+        # Show applications if any
+        applications = self.get_student_applications()
+        if applications:
+            st.subheader("📋 Your Applications")
+            for app in applications:
+                status = app.get('status', 'pending')
+                status_color = {
+                    'pending': '🟡',
+                    'accepted': '🟢',
+                    'rejected': '🔴',
+                    'interview': '🔵'
+                }.get(status, '⚪')
+                
+                st.write(f"{status_color} {app.get('job_title', 'Job')} - {status}")
     
     def step7_interview_preparation(self):
         """Step 7: Interview Preparation"""
         st.info("Prepare for technical and HR interviews")
+        
+        # Show upcoming interviews from database
+        if not st.session_state.demo_mode:
+            applications = self.get_student_applications()
+            upcoming_interviews = [app for app in applications if app.get('status') == 'interview']
+            
+            if upcoming_interviews:
+                st.subheader("📅 Upcoming Interviews")
+                for interview in upcoming_interviews:
+                    st.info(f"**{interview.get('job_title', 'Job')}** - Scheduled")
         
         st.write("**Common Interview Questions:**")
         
@@ -337,6 +600,7 @@ class StudentFlow:
                     - Structure your answer clearly
                     - Provide specific examples
                     - Connect to the company's values
+                    - Practice with mock interviews
                     """)
     
     def step8_placement_tracking(self):
@@ -352,12 +616,29 @@ class StudentFlow:
         with col3:
             st.metric("Career Plan", "✅ Set")
         
+        # Show real applications if any
+        if not st.session_state.demo_mode:
+            applications = self.get_student_applications()
+            if applications:
+                st.subheader("📊 Your Application Status")
+                status_counts = {}
+                for app in applications:
+                    status = app.get('status', 'pending')
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                
+                for status, count in status_counts.items():
+                    st.write(f"• {status.title()}: {count}")
+        
         # Final recommendations
         st.subheader("🎯 Final Recommendations")
         st.write("1. ✅ Continue skill development")
         st.write("2. ✅ Network with professionals")
         st.write("3. ✅ Prepare for interviews")
         st.write("4. ✅ Stay updated with industry trends")
+        
+        # Database connection status
+        if not st.session_state.demo_mode:
+            st.info("💾 Your data is saved in the cloud database!")
         
         # Restart option
         if st.button("🔄 Start New Journey", width='stretch'):
@@ -379,3 +660,10 @@ class StudentFlow:
             if current_step < 8 and st.button("Next Step ➡️", width='stretch'):
                 st.session_state.current_step_student = current_step + 1
                 st.rerun()
+        
+        # Add database status in the middle column
+        with col2:
+            if not st.session_state.demo_mode and st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+                st.caption("💾 Connected to Live Database")
+            elif st.session_state.demo_mode:
+                st.caption("⚠️ Demo Mode - Data not saved")
