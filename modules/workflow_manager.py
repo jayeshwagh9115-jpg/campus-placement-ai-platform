@@ -3,13 +3,11 @@ import pandas as pd
 
 class WorkflowManager:
     def __init__(self):
-        # Initialize workflows in session state
-        if 'workflows' not in st.session_state:
-            self._initialize_workflows()
+        self.workflows = self.initialize_workflows()
     
-    def _initialize_workflows(self):
+    def initialize_workflows(self):
         """Define all systematic workflows"""
-        st.session_state.workflows = {
+        return {
             "student": {
                 "steps": [
                     {"id": 1, "name": "🎯 Profile Creation", "status": "pending"},
@@ -51,19 +49,11 @@ class WorkflowManager:
             }
         }
     
-    def _update_step(self, role, direction):
-        """Update step for a specific role"""
-        if direction == "next":
-            st.session_state.workflows[role]["current_step"] += 1
-        elif direction == "prev":
-            st.session_state.workflows[role]["current_step"] -= 1
-        st.rerun()
-    
     def display_student_workflow(self):
         """Display student workflow steps"""
         st.subheader("📋 Student Placement Journey")
         
-        workflow = st.session_state.workflows["student"]
+        workflow = self.workflows["student"]
         current_step = workflow["current_step"]
         
         # Progress bar
@@ -81,51 +71,36 @@ class WorkflowManager:
             </div>
             """, unsafe_allow_html=True)
         
-        # Navigation with callback functions
+        # Navigation
         col1, col2 = st.columns(2)
-        
         with col1:
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="prev_student_btn"):
-                    self._update_step("student", "prev")
-        
+            if current_step > 1 and st.button("⬅️ Previous Step"):
+                workflow["current_step"] -= 1
+                st.rerun()
         with col2:
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="next_student_btn"):
-                    self._update_step("student", "next")
+            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️"):
+                workflow["current_step"] += 1
+                st.rerun()
     
     def display_college_workflow(self):
         """Display college admin workflow"""
         st.subheader("🏫 College Placement Management")
         
-        workflow = st.session_state.workflows["college"]
+        workflow = self.workflows["college"]
         current_step = workflow["current_step"]
         
         # Display as a timeline
         for step in workflow["steps"]:
-            if step["id"] < current_step:
+            if step["id"] <= current_step:
                 st.success(f"✅ {step['name']}")
-            elif step["id"] == current_step:
-                st.warning(f"🔄 {step['name']} (Current)")
             else:
                 st.info(f"⏳ {step['name']}")
-        
-        # Navigation
-        col1, col2 = st.columns(2)
-        with col1:
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="prev_college_btn"):
-                    self._update_step("college", "prev")
-        with col2:
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="next_college_btn"):
-                    self._update_step("college", "next")
     
     def display_recruiter_workflow(self):
         """Display recruiter workflow"""
         st.subheader("💼 Recruiter Hiring Process")
         
-        workflow = st.session_state.workflows["recruiter"]
+        workflow = self.workflows["recruiter"]
         current_step = workflow["current_step"]
         
         # Visual timeline
@@ -133,40 +108,11 @@ class WorkflowManager:
         for idx, step in enumerate(workflow["steps"]):
             with cols[idx]:
                 if step["id"] < current_step:
-                    st.markdown(f"""
-                    <div style='background-color: #4CAF50; color: white; padding: 10px; 
-                    border-radius: 5px; text-align: center;'>
-                        <b>✅ {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style='background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
                 elif step["id"] == current_step:
-                    st.markdown(f"""
-                    <div style='background-color: #2196F3; color: white; padding: 10px; 
-                    border-radius: 5px; text-align: center;'>
-                        <b>🔄 {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"""
-                    <div style='background-color: #e0e0e0; padding: 10px; 
-                    border-radius: 5px; text-align: center;'>
-                        <b>⏳ {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Navigation
-        col1, col2 = st.columns(2)
-        with col1:
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="prev_recruiter_btn"):
-                    self._update_step("recruiter", "prev")
-        with col2:
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="next_recruiter_btn"):
-                    self._update_step("recruiter", "next")
+                    st.markdown(f"<div style='background-color: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
     
     def display_observer_dashboard(self):
         """Dashboard for observers/judges"""
@@ -181,39 +127,24 @@ class WorkflowManager:
         
         with col1:
             st.subheader("👨‍🎓 Student Journey")
-            student_workflow = st.session_state.workflows["student"]
-            student_current = student_workflow["current_step"]
-            for step in student_workflow["steps"]:
-                if step["id"] < student_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == student_current:
-                    st.write(f"🔄 {step['name']} (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
+            student_steps = self.workflows["student"]["steps"]
+            for step in student_steps[:4]:
+                st.write(f"• {step['name']}")
+            st.write("...")
         
         with col2:
             st.subheader("🏫 College Process")
-            college_workflow = st.session_state.workflows["college"]
-            college_current = college_workflow["current_step"]
-            for step in college_workflow["steps"]:
-                if step["id"] < college_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == college_current:
-                    st.write(f"🔄 {step['name']} (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
+            college_steps = self.workflows["college"]["steps"]
+            for step in college_steps[:4]:
+                st.write(f"• {step['name']}")
+            st.write("...")
         
         with col3:
             st.subheader("💼 Recruiter Flow")
-            recruiter_workflow = st.session_state.workflows["recruiter"]
-            recruiter_current = recruiter_workflow["current_step"]
-            for step in recruiter_workflow["steps"]:
-                if step["id"] < recruiter_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == recruiter_current:
-                    st.write(f"🔄 {step['name']} (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
+            recruiter_steps = self.workflows["recruiter"]["steps"]
+            for step in recruiter_steps[:4]:
+                st.write(f"• {step['name']}")
+            st.write("...")
         
         # System statistics
         st.subheader("📊 System Statistics")
@@ -226,54 +157,3 @@ class WorkflowManager:
             st.metric("Active Users", "1,250")
         with metrics_col4:
             st.metric("Success Rate", "92%")
-
-
-# TEST FUNCTION - Use this to test the workflow
-def test_workflow_app():
-    """Test the workflow functionality"""
-    st.set_page_config(layout="wide")
-    st.title("🚀 Placement Platform Workflow Manager")
-    
-    # Initialize workflow manager
-    wm = WorkflowManager()
-    
-    # Sidebar for navigation
-    st.sidebar.header("Navigation")
-    selected_role = st.sidebar.radio(
-        "Select Role to View:",
-        ["Student", "College", "Recruiter", "Observer"],
-        index=0
-    )
-    
-    # Reset button in sidebar
-    if st.sidebar.button("🔄 Reset All Workflows"):
-        if 'workflows' in st.session_state:
-            del st.session_state.workflows
-        st.rerun()
-    
-    # Display current step info
-    st.sidebar.subheader("Current Status")
-    if 'workflows' in st.session_state:
-        for role, data in st.session_state.workflows.items():
-            st.sidebar.write(f"**{role.title()}**: Step {data['current_step']} of {len(data['steps'])}")
-    
-    # Main content area
-    if selected_role == "Student":
-        wm.display_student_workflow()
-    elif selected_role == "College":
-        wm.display_college_workflow()
-    elif selected_role == "Recruiter":
-        wm.display_recruiter_workflow()
-    else:
-        wm.display_observer_view()
-    
-    # Debug information (optional)
-    with st.expander("Debug Info"):
-        st.write("Session state:", st.session_state)
-        if 'workflows' in st.session_state:
-            st.write("Workflows data:", st.session_state.workflows)
-
-
-# Run the test app if this file is executed directly
-if __name__ == "__main__":
-    test_workflow_app()
