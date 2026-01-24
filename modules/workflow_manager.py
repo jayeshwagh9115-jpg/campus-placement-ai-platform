@@ -3,7 +3,8 @@ import pandas as pd
 
 class WorkflowManager:
     def __init__(self):
-        self.workflows = self.initialize_workflows()
+        if 'workflows' not in st.session_state:
+            st.session_state.workflows = self.initialize_workflows()
     
     def initialize_workflows(self):
         """Define all systematic workflows"""
@@ -53,7 +54,7 @@ class WorkflowManager:
         """Display student workflow steps"""
         st.subheader("📋 Student Placement Journey")
         
-        workflow = self.workflows["student"]
+        workflow = st.session_state.workflows["student"]
         current_step = workflow["current_step"]
         
         # Progress bar
@@ -74,19 +75,19 @@ class WorkflowManager:
         # Navigation
         col1, col2 = st.columns(2)
         with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step"):
-                workflow["current_step"] -= 1
+            if current_step > 1 and st.button("⬅️ Previous Step", key="prev_student"):
+                st.session_state.workflows["student"]["current_step"] -= 1
                 st.rerun()
         with col2:
-            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️"):
-                workflow["current_step"] += 1
+            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="next_student"):
+                st.session_state.workflows["student"]["current_step"] += 1
                 st.rerun()
     
     def display_college_workflow(self):
         """Display college admin workflow"""
         st.subheader("🏫 College Placement Management")
         
-        workflow = self.workflows["college"]
+        workflow = st.session_state.workflows["college"]
         current_step = workflow["current_step"]
         
         # Display as a timeline
@@ -95,12 +96,23 @@ class WorkflowManager:
                 st.success(f"✅ {step['name']}")
             else:
                 st.info(f"⏳ {step['name']}")
+        
+        # Navigation
+        col1, col2 = st.columns(2)
+        with col1:
+            if current_step > 1 and st.button("⬅️ Previous Step", key="prev_college"):
+                st.session_state.workflows["college"]["current_step"] -= 1
+                st.rerun()
+        with col2:
+            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="next_college"):
+                st.session_state.workflows["college"]["current_step"] += 1
+                st.rerun()
     
     def display_recruiter_workflow(self):
         """Display recruiter workflow"""
         st.subheader("💼 Recruiter Hiring Process")
         
-        workflow = self.workflows["recruiter"]
+        workflow = st.session_state.workflows["recruiter"]
         current_step = workflow["current_step"]
         
         # Visual timeline
@@ -113,6 +125,17 @@ class WorkflowManager:
                     st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"<div style='background-color: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
+        
+        # Navigation
+        col1, col2 = st.columns(2)
+        with col1:
+            if current_step > 1 and st.button("⬅️ Previous Step", key="prev_recruiter"):
+                st.session_state.workflows["recruiter"]["current_step"] -= 1
+                st.rerun()
+        with col2:
+            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="next_recruiter"):
+                st.session_state.workflows["recruiter"]["current_step"] += 1
+                st.rerun()
     
     def display_observer_dashboard(self):
         """Dashboard for observers/judges"""
@@ -127,21 +150,21 @@ class WorkflowManager:
         
         with col1:
             st.subheader("👨‍🎓 Student Journey")
-            student_steps = self.workflows["student"]["steps"]
+            student_steps = st.session_state.workflows["student"]["steps"]
             for step in student_steps[:4]:
                 st.write(f"• {step['name']}")
             st.write("...")
         
         with col2:
             st.subheader("🏫 College Process")
-            college_steps = self.workflows["college"]["steps"]
+            college_steps = st.session_state.workflows["college"]["steps"]
             for step in college_steps[:4]:
                 st.write(f"• {step['name']}")
             st.write("...")
         
         with col3:
             st.subheader("💼 Recruiter Flow")
-            recruiter_steps = self.workflows["recruiter"]["steps"]
+            recruiter_steps = st.session_state.workflows["recruiter"]["steps"]
             for step in recruiter_steps[:4]:
                 st.write(f"• {step['name']}")
             st.write("...")
