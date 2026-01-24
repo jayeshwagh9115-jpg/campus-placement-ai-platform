@@ -1,355 +1,467 @@
 import streamlit as st
+import pandas as pd
+import traceback
+import random  # Added for debug function
 
-class WorkflowManager:
-    def __init__(self):
-        # Initialize workflows in session state if they don't exist
-        if 'workflows' not in st.session_state:
-            st.session_state.workflows = self.initialize_workflows()
+# TEMPORARY DEBUG FIX - Add this near the top
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+def debug_database_save():
+    """Debug function to test database save"""
+    if st.session_state.get('db_manager') and st.session_state.db_manager.is_connected:
+        db = st.session_state.db_manager
         
-        # Store button callbacks in session state
-        if 'workflow_callbacks' not in st.session_state:
-            st.session_state.workflow_callbacks = {}
-    
-    def initialize_workflows(self):
-        """Define all systematic workflows"""
-        return {
-            "student": {
-                "steps": [
-                    {"id": 1, "name": "🎯 Profile Creation", "status": "pending"},
-                    {"id": 2, "name": "📝 AI Resume Building", "status": "pending"},
-                    {"id": 3, "name": "📚 NEP Course Planning", "status": "pending"},
-                    {"id": 4, "name": "💼 PM Internship Match", "status": "pending"},
-                    {"id": 5, "name": "🎯 Career Path Planning", "status": "pending"},
-                    {"id": 6, "name": "📊 Placement Prediction", "status": "pending"},
-                    {"id": 7, "name": "🤝 Interview Preparation", "status": "pending"},
-                    {"id": 8, "name": "✅ Placement Tracking", "status": "pending"}
-                ],
-                "current_step": 1
-            },
-            "college": {
-                "steps": [
-                    {"id": 1, "name": "👨‍🎓 Student Database", "status": "pending"},
-                    {"id": 2, "name": "📊 Analytics Dashboard", "status": "pending"},
-                    {"id": 3, "name": "🏢 Company Registration", "status": "pending"},
-                    {"id": 4, "name": "📅 Drive Scheduling", "status": "pending"},
-                    {"id": 5, "name": "🎯 Student-Company Matching", "status": "pending"},
-                    {"id": 6, "name": "📝 Interview Management", "status": "pending"},
-                    {"id": 7, "name": "✅ Placement Records", "status": "pending"},
-                    {"id": 8, "name": "📈 Performance Reports", "status": "pending"}
-                ],
-                "current_step": 1
-            },
-            "recruiter": {
-                "steps": [
-                    {"id": 1, "name": "🏢 Company Profile", "status": "pending"},
-                    {"id": 2, "name": "📋 Job Posting", "status": "pending"},
-                    {"id": 3, "name": "🎯 Candidate Search", "status": "pending"},
-                    {"id": 4, "name": "🤖 AI Screening", "status": "pending"},
-                    {"id": 5, "name": "📅 Interview Scheduling", "status": "pending"},
-                    {"id": 6, "name": "📊 Candidate Evaluation", "status": "pending"},
-                    {"id": 7, "name": "✅ Offer Management", "status": "pending"},
-                    {"id": 8, "name": "📈 Hiring Analytics", "status": "pending"}
-                ],
-                "current_step": 1
-            }
+        # Simple test data
+        test_data = {
+            "full_name": "Debug Test",
+            "email": f"debug{random.randint(1000, 9999)}@test.com",
+            "roll_number": f"DEBUG{random.randint(1000, 9999)}",
+            "department": "Test"
         }
-    
-    def update_student_step(self, direction):
-        """Update student workflow step"""
-        if direction == "next":
-            if st.session_state.workflows["student"]["current_step"] < len(st.session_state.workflows["student"]["steps"]):
-                st.session_state.workflows["student"]["current_step"] += 1
-        elif direction == "prev":
-            if st.session_state.workflows["student"]["current_step"] > 1:
-                st.session_state.workflows["student"]["current_step"] -= 1
-    
-    def update_college_step(self, direction):
-        """Update college workflow step"""
-        if direction == "next":
-            if st.session_state.workflows["college"]["current_step"] < len(st.session_state.workflows["college"]["steps"]):
-                st.session_state.workflows["college"]["current_step"] += 1
-        elif direction == "prev":
-            if st.session_state.workflows["college"]["current_step"] > 1:
-                st.session_state.workflows["college"]["current_step"] -= 1
-    
-    def update_recruiter_step(self, direction):
-        """Update recruiter workflow step"""
-        if direction == "next":
-            if st.session_state.workflows["recruiter"]["current_step"] < len(st.session_state.workflows["recruiter"]["steps"]):
-                st.session_state.workflows["recruiter"]["current_step"] += 1
-        elif direction == "prev":
-            if st.session_state.workflows["recruiter"]["current_step"] > 1:
-                st.session_state.workflows["recruiter"]["current_step"] -= 1
-    
-    def display_student_workflow(self):
-        """Display student workflow steps"""
-        st.subheader("📋 Student Placement Journey")
         
-        workflow = st.session_state.workflows["student"]
-        current_step = workflow["current_step"]
-        
-        # Progress bar
-        progress = current_step / len(workflow["steps"])
-        st.progress(progress)
-        
-        # Display steps
-        for step in workflow["steps"]:
-            status_icon = "✅" if step["id"] < current_step else "🔄" if step["id"] == current_step else "⏳"
-            status_color = "green" if step["id"] < current_step else "blue" if step["id"] == current_step else "gray"
+        try:
+            # Try different methods
+            st.write("**Testing save methods:**")
             
-            st.markdown(f"""
-            <div style="border-left: 4px solid {status_color}; padding-left: 10px; margin: 10px 0;">
-                <b>{status_icon} Step {step['id']}: {step['name']}</b>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Navigation - Using columns for better layout
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Previous button
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="student_prev", 
-                           disabled=(current_step <= 1),
-                           use_container_width=True):
-                    self.update_student_step("prev")
-                    st.rerun()
-            else:
-                st.button("⬅️ Previous Step", key="student_prev_disabled", 
-                         disabled=True, use_container_width=True)
-        
-        with col2:
-            # Next button
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="student_next",
-                           disabled=(current_step >= len(workflow["steps"])),
-                           use_container_width=True):
-                    self.update_student_step("next")
-                    st.rerun()
-            else:
-                st.button("Next Step ➡️", key="student_next_disabled", 
-                         disabled=True, use_container_width=True)
-        
-        # Step indicator
-        st.caption(f"**Current Step: {current_step} of {len(workflow['steps'])}**")
-    
-    def display_college_workflow(self):
-        """Display college admin workflow"""
-        st.subheader("🏫 College Placement Management")
-        
-        workflow = st.session_state.workflows["college"]
-        current_step = workflow["current_step"]
-        
-        # Display as a timeline
-        for step in workflow["steps"]:
-            if step["id"] < current_step:
-                st.success(f"✅ {step['name']}")
-            elif step["id"] == current_step:
-                st.warning(f"🔄 {step['name']}")
-            else:
-                st.info(f"⏳ {step['name']}")
-        
-        # Navigation
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="college_prev",
-                           use_container_width=True):
-                    self.update_college_step("prev")
-                    st.rerun()
-            else:
-                st.button("⬅️ Previous Step", key="college_prev_disabled",
-                         disabled=True, use_container_width=True)
-        
-        with col2:
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="college_next",
-                           use_container_width=True):
-                    self.update_college_step("next")
-                    st.rerun()
-            else:
-                st.button("Next Step ➡️", key="college_next_disabled",
-                         disabled=True, use_container_width=True)
-        
-        # Step indicator
-        st.caption(f"**Current Step: {current_step} of {len(workflow['steps'])}**")
-    
-    def display_recruiter_workflow(self):
-        """Display recruiter workflow"""
-        st.subheader("💼 Recruiter Hiring Process")
-        
-        workflow = st.session_state.workflows["recruiter"]
-        current_step = workflow["current_step"]
-        
-        # Visual timeline - use tabs for better mobile view
-        tab_cols = st.columns(len(workflow["steps"]))
-        for idx, step in enumerate(workflow["steps"]):
-            with tab_cols[idx]:
-                if step["id"] < current_step:
-                    st.markdown(f"""
-                    <div style='background-color: #4CAF50; color: white; padding: 8px; 
-                    border-radius: 5px; text-align: center; margin: 2px; font-size: 12px;'>
-                        <b>✅ {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif step["id"] == current_step:
-                    st.markdown(f"""
-                    <div style='background-color: #2196F3; color: white; padding: 8px; 
-                    border-radius: 5px; text-align: center; margin: 2px; font-size: 12px;'>
-                        <b>🔄 {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='background-color: #e0e0e0; padding: 8px; 
-                    border-radius: 5px; text-align: center; margin: 2px; font-size: 12px;'>
-                        <b>⏳ {step['id']}</b><br>
-                        {step['name'].split()[0]}
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Navigation
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if current_step > 1:
-                if st.button("⬅️ Previous Step", key="recruiter_prev",
-                           use_container_width=True):
-                    self.update_recruiter_step("prev")
-                    st.rerun()
-            else:
-                st.button("⬅️ Previous Step", key="recruiter_prev_disabled",
-                         disabled=True, use_container_width=True)
-        
-        with col2:
-            if current_step < len(workflow["steps"]):
-                if st.button("Next Step ➡️", key="recruiter_next",
-                           use_container_width=True):
-                    self.update_recruiter_step("next")
-                    st.rerun()
-            else:
-                st.button("Next Step ➡️", key="recruiter_next_disabled",
-                         disabled=True, use_container_width=True)
-        
-        # Step indicator
-        st.caption(f"**Current Step: {current_step} of {len(workflow['steps'])}**")
-    
-    def display_observer_dashboard(self):
-        """Dashboard for observers/judges"""
-        st.subheader("👀 Platform Overview")
-        st.info("Select a role to explore the systematic workflows")
-        
-        # Show all workflows
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("👨‍🎓 Student")
-            student_flow = st.session_state.workflows["student"]
-            st.write(f"**Step:** {student_flow['current_step']}/8")
-            st.progress(student_flow['current_step']/8)
-        
-        with col2:
-            st.subheader("🏫 College")
-            college_flow = st.session_state.workflows["college"]
-            st.write(f"**Step:** {college_flow['current_step']}/8")
-            st.progress(college_flow['current_step']/8)
-        
-        with col3:
-            st.subheader("💼 Recruiter")
-            recruiter_flow = st.session_state.workflows["recruiter"]
-            st.write(f"**Step:** {recruiter_flow['current_step']}/8")
-            st.progress(recruiter_flow['current_step']/8)
-        
-        # Reset all button
-        if st.button("🔄 Reset All Workflows", key="reset_all_workflows"):
-            st.session_state.workflows["student"]["current_step"] = 1
-            st.session_state.workflows["college"]["current_step"] = 1
-            st.session_state.workflows["recruiter"]["current_step"] = 1
-            st.rerun()
-    
-    def display_observer_view(self):
-        """Observer view of the entire system"""
-        st.header("🌐 Complete System Overview")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("👨‍🎓 Student Journey")
-            student_steps = st.session_state.workflows["student"]["steps"]
-            student_current = st.session_state.workflows["student"]["current_step"]
-            for step in student_steps:
-                if step["id"] < student_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == student_current:
-                    st.write(f"🔄 **{step['name']}** (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
-        
-        with col2:
-            st.subheader("🏫 College Process")
-            college_steps = st.session_state.workflows["college"]["steps"]
-            college_current = st.session_state.workflows["college"]["current_step"]
-            for step in college_steps:
-                if step["id"] < college_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == college_current:
-                    st.write(f"🔄 **{step['name']}** (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
-        
-        with col3:
-            st.subheader("💼 Recruiter Flow")
-            recruiter_steps = st.session_state.workflows["recruiter"]["steps"]
-            recruiter_current = st.session_state.workflows["recruiter"]["current_step"]
-            for step in recruiter_steps:
-                if step["id"] < recruiter_current:
-                    st.write(f"✅ {step['name']}")
-                elif step["id"] == recruiter_current:
-                    st.write(f"🔄 **{step['name']}** (Current)")
-                else:
-                    st.write(f"⏳ {step['name']}")
-        
-        # System statistics
-        st.subheader("📊 System Statistics")
-        metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
-        with metrics_col1:
-            st.metric("Total Workflows", "3")
-        with metrics_col2:
-            st.metric("Process Steps", "24")
-        with metrics_col3:
-            st.metric("Active Users", "1,250")
-        with metrics_col4:
-            st.metric("Success Rate", "92%")
+            # Method 1: Direct insert
+            st.write("1. Direct insert:")
+            result1 = db.insert('students', test_data)
+            st.write(f"   Result: {result1}")
+            
+            # Method 2: Using client directly
+            st.write("2. Using client directly:")
+            try:
+                result2 = db.client.table('students').insert(test_data).execute()
+                st.write(f"   Result: {result2.data if result2.data else 'No data'}")
+            except Exception as e:
+                st.write(f"   Error: {e}")
+            
+            # Method 3: Raw request
+            st.write("3. Raw HTTP request:")
+            import requests
+            headers = {
+                "apikey": db.key,
+                "Authorization": f"Bearer {db.key}",
+                "Content-Type": "application/json"
+            }
+            response = requests.post(
+                f"{db.url}/rest/v1/students",
+                json=test_data,
+                headers=headers
+            )
+            st.write(f"   Status: {response.status_code}")
+            st.write(f"   Response: {response.text[:200]}")
+            
+        except Exception as e:
+            st.error(f"Debug error: {e}")
 
+# Try to import database modules with fallbacks
+try:
+    from database.supabase_manager import SupabaseManager
+    DB_AVAILABLE = True
+except ImportError as e:
+    DB_AVAILABLE = False
+    st.warning(f"Supabase module not available: {e}")
 
-# Test function to verify it works
-if __name__ == "__main__":
-    st.set_page_config(layout="wide", page_title="Workflow Test")
-    st.title("🧪 Workflow Manager Test")
-    
-    # Initialize workflow manager
-    wm = WorkflowManager()
-    
-    # Role selection
-    role = st.radio("Select Role:", ["Student", "College", "Recruiter", "Observer"], 
-                   horizontal=True, index=0)
-    
-    # Display the selected workflow
-    if role == "Student":
-        wm.display_student_workflow()
-    elif role == "College":
-        wm.display_college_workflow()
-    elif role == "Recruiter":
-        wm.display_recruiter_workflow()
+try:
+    from modules.workflow_manager import WorkflowManager
+    from modules.student_flow import StudentFlow
+    from modules.college_flow import CollegeFlow
+    from modules.recruiter_flow import RecruiterFlow
+    MODULES_AVAILABLE = True
+except ImportError as e:
+    MODULES_AVAILABLE = False
+    st.error(f"❌ Failed to import modules: {e}")
+
+# Page configuration
+st.set_page_config(
+    page_title="AI Campus Placement Platform",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state for database
+if 'db_manager' not in st.session_state:
+    if DB_AVAILABLE:
+        try:
+            st.session_state.db_manager = SupabaseManager()
+            st.session_state.demo_mode = not st.session_state.db_manager.is_connected
+            if st.session_state.demo_mode:
+                st.warning("⚠️ Database connection failed - Running in Demo Mode")
+        except Exception as e:
+            st.session_state.demo_mode = True
+            st.error(f"Database initialization error: {e}")
     else:
-        wm.display_observer_view()
+        st.session_state.demo_mode = True
+
+# Initialize all session state objects only if modules are available
+if MODULES_AVAILABLE:
+    if 'workflow_manager' not in st.session_state:
+        st.session_state.workflow_manager = WorkflowManager()
+
+    if 'student_flow' not in st.session_state:
+        st.session_state.student_flow = StudentFlow()
+
+    if 'college_flow' not in st.session_state:
+        st.session_state.college_flow = CollegeFlow()
+
+    if 'recruiter_flow' not in st.session_state:
+        st.session_state.recruiter_flow = RecruiterFlow()
+else:
+    # Create placeholder objects if modules are not available
+    st.session_state.workflow_manager = None
+    st.session_state.student_flow = None
+    st.session_state.college_flow = None
+    st.session_state.recruiter_flow = None
+
+# Initialize session state variables
+if 'recruiter_step' not in st.session_state:
+    st.session_state.recruiter_step = 1
     
-    # Show debug info
-    with st.expander("Debug Info"):
-        st.write("Session State Workflows:", st.session_state.workflows)
-        st.write("Student Current Step:", st.session_state.workflows["student"]["current_step"])
-        st.write("College Current Step:", st.session_state.workflows["college"]["current_step"])
-        st.write("Recruiter Current Step:", st.session_state.workflows["recruiter"]["current_step"])
+if 'selected_role' not in st.session_state:
+    st.session_state.selected_role = None
+
+if 'current_step_student' not in st.session_state:
+    st.session_state.current_step_student = 1
+    
+if 'current_step_college' not in st.session_state:
+    st.session_state.current_step_college = 1
+
+# Title and description
+st.title("🎓 AI-Powered Campus Placement Management System")
+st.markdown("""
+### National Level Hackathon Project
+**A Systematic End-to-End Placement Management Platform**
+""")
+
+# Database status display
+if st.session_state.demo_mode:
+    st.warning("⚠️ **Running in Demo Mode** - Data is stored in memory only")
+else:
+    if hasattr(st.session_state.db_manager, 'is_connected') and st.session_state.db_manager.is_connected:
+        st.success("✅ **Connected to Supabase Database**")
+    else:
+        st.error("❌ **Database Connection Failed** - Running in demo mode")
+
+# Show warning if database not available
+if not DB_AVAILABLE:
+    st.warning("""
+    ⚠️ **Database module not available** - Running in demo mode.
+    All data is stored in memory and will be lost when the app restarts.
+    """)
+
+# Check if modules are available
+if not MODULES_AVAILABLE:
+    st.error("""
+    ❌ **Critical Error: Application modules not found**
+    
+    Please make sure the following modules exist:
+    - `modules/workflow_manager.py`
+    - `modules/student_flow.py`
+    - `modules/college_flow.py`
+    - `modules/recruiter_flow.py`
+    
+    The app cannot continue without these modules.
+    """)
+    st.stop()
+
+# Sidebar
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=100)
+    st.title("Platform Navigation")
+    
+    # Database status indicator
+    if st.session_state.get('db_manager') and hasattr(st.session_state.db_manager, 'is_connected') and st.session_state.db_manager.is_connected:
+        st.success("✅ Live Database")
+        
+        # Quick stats with error handling
+        try:
+            stats = st.session_state.db_manager.get_dashboard_stats()
+            with st.expander("📊 Quick Stats"):
+                st.write(f"👨‍🎓 Students: {stats.get('total_students', 0)}")
+                st.write(f"💼 Companies: {stats.get('total_companies', 0)}")
+                st.write(f"📋 Active Jobs: {stats.get('active_jobs', 0)}")
+                st.write(f"📄 Applications: {stats.get('total_applications', 0)}")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load stats: {str(e)[:50]}")
+    else:
+        st.warning("⚠️ Demo Mode")
+    
+    st.divider()
+    
+    # Demo mode info
+    if st.session_state.demo_mode:
+        st.info("🎮 Demo Mode Active - Using in-memory data")
+    
+    st.subheader("Select Your Role")
+    
+    role = st.radio(
+        "Choose your role:",
+        ["👨‍🎓 Student", "🏫 College Admin", "💼 Recruiter", "👀 Observer"],
+        key="role_selection",
+        label_visibility="collapsed"
+    )
+    
+    # Store selected role
+    if role != st.session_state.get('selected_role'):
+        st.session_state.selected_role = role
+        # Reset steps when switching roles
+        st.session_state.recruiter_step = 1
+        st.session_state.current_step_student = 1
+        st.session_state.current_step_college = 1
+        # Update workflow manager steps
+        if st.session_state.workflow_manager:
+            st.session_state.workflow_manager.update_student_step("reset")
+            st.session_state.workflow_manager.update_college_step("reset")
+            st.session_state.workflow_manager.update_recruiter_step("reset")
+    
+    st.divider()
+    
+    # Show workflow based on selected role
+    if st.session_state.selected_role == "👨‍🎓 Student":
+        if st.session_state.workflow_manager:
+            # Display student workflow in sidebar
+            st.session_state.workflow_manager.display_student_workflow()
+    elif st.session_state.selected_role == "🏫 College Admin":
+        if st.session_state.workflow_manager:
+            # Display college workflow in sidebar
+            st.session_state.workflow_manager.display_college_workflow()
+    elif st.session_state.selected_role == "💼 Recruiter":
+        if st.session_state.workflow_manager:
+            # Display recruiter workflow in sidebar
+            st.session_state.workflow_manager.display_recruiter_workflow()
+    else:
+        if st.session_state.workflow_manager:
+            # Display observer dashboard
+            st.subheader("👀 Observer Dashboard")
+            st.info("Select a role to explore the workflows")
+
+# Main content
+try:
+    if st.session_state.selected_role == "👨‍🎓 Student":
+        if not st.session_state.student_flow:
+            st.error("Student flow module not initialized")
+            st.stop()
+        
+        # Get current step from workflow manager
+        if st.session_state.workflow_manager and 'workflows' in st.session_state:
+            current_step = st.session_state.workflows["student"]["current_step"]
+            st.session_state.current_step_student = current_step
+        else:
+            current_step = st.session_state.current_step_student
+        
+        # SAFE METHOD: Check if set_database_manager exists before calling
+        if not st.session_state.demo_mode and st.session_state.get('db_manager'):
+            if hasattr(st.session_state.student_flow, 'set_database_manager'):
+                # Use the new method if it exists
+                st.session_state.student_flow.set_database_manager(
+                    st.session_state.db_manager, 
+                    st.session_state.demo_mode
+                )
+            elif hasattr(st.session_state.student_flow, 'db_manager'):
+                # Fallback to old method (set attribute directly)
+                st.session_state.student_flow.db_manager = st.session_state.db_manager
+                if hasattr(st.session_state.student_flow, 'demo_mode'):
+                    st.session_state.student_flow.demo_mode = st.session_state.demo_mode
+            else:
+                # If neither method exists, just set as attribute
+                st.session_state.student_flow.db_manager = st.session_state.db_manager
+        else:
+            # Demo mode - set to None
+            if hasattr(st.session_state.student_flow, 'set_database_manager'):
+                st.session_state.student_flow.set_database_manager(None, True)
+            elif hasattr(st.session_state.student_flow, 'db_manager'):
+                st.session_state.student_flow.db_manager = None
+                if hasattr(st.session_state.student_flow, 'demo_mode'):
+                    st.session_state.student_flow.demo_mode = True
+        
+        # Display student flow with current step
+        st.session_state.student_flow.current_step = current_step
+        st.session_state.student_flow.display()
+        
+    elif st.session_state.selected_role == "🏫 College Admin":
+        if not st.session_state.college_flow:
+            st.error("College flow module not initialized")
+            st.stop()
+        
+        # Get current step from workflow manager
+        if st.session_state.workflow_manager and 'workflows' in st.session_state:
+            current_step = st.session_state.workflows["college"]["current_step"]
+            st.session_state.current_step_college = current_step
+        else:
+            current_step = st.session_state.current_step_college
+        
+        # SAFE METHOD for college flow too
+        if not st.session_state.demo_mode and st.session_state.get('db_manager'):
+            if hasattr(st.session_state.college_flow, 'set_database_manager'):
+                st.session_state.college_flow.set_database_manager(
+                    st.session_state.db_manager,
+                    st.session_state.demo_mode
+                )
+            elif hasattr(st.session_state.college_flow, 'db_manager'):
+                st.session_state.college_flow.db_manager = st.session_state.db_manager
+                if hasattr(st.session_state.college_flow, 'demo_mode'):
+                    st.session_state.college_flow.demo_mode = st.session_state.demo_mode
+            else:
+                st.session_state.college_flow.db_manager = st.session_state.db_manager
+        else:
+            if hasattr(st.session_state.college_flow, 'set_database_manager'):
+                st.session_state.college_flow.set_database_manager(None, True)
+            elif hasattr(st.session_state.college_flow, 'db_manager'):
+                st.session_state.college_flow.db_manager = None
+                if hasattr(st.session_state.college_flow, 'demo_mode'):
+                    st.session_state.college_flow.demo_mode = True
+        
+        # Display college flow with current step
+        st.session_state.college_flow.current_step = current_step
+        st.session_state.college_flow.display()
+        
+    elif st.session_state.selected_role == "💼 Recruiter":
+        if not st.session_state.recruiter_flow:
+            st.error("Recruiter flow module not initialized")
+            st.stop()
+        
+        # For recruiter flow
+        if not st.session_state.demo_mode and st.session_state.get('db_manager'):
+            if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
+                st.session_state.recruiter_flow.set_database_manager(
+                    st.session_state.db_manager,
+                    st.session_state.demo_mode
+                )
+            elif hasattr(st.session_state.recruiter_flow, 'db_manager'):
+                st.session_state.recruiter_flow.db_manager = st.session_state.db_manager
+                if hasattr(st.session_state.recruiter_flow, 'demo_mode'):
+                    st.session_state.recruiter_flow.demo_mode = st.session_state.demo_mode
+            else:
+                st.session_state.recruiter_flow.db_manager = st.session_state.db_manager
+        else:
+            if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
+                st.session_state.recruiter_flow.set_database_manager(None, True)
+            elif hasattr(st.session_state.recruiter_flow, 'db_manager'):
+                st.session_state.recruiter_flow.db_manager = None
+                if hasattr(st.session_state.recruiter_flow, 'demo_mode'):
+                    st.session_state.recruiter_flow.demo_mode = True
+        
+        # Get current step from session state
+        current_step = st.session_state.recruiter_step
+        
+        # Display recruiter flow with current step
+        st.session_state.recruiter_flow.display(current_step)
+        
+    elif st.session_state.selected_role == "👀 Observer":
+        # Display observer view
+        if st.session_state.workflow_manager:
+            st.session_state.workflow_manager.display_observer_view()
+        else:
+            # Fallback if workflow manager is not available
+            st.header("📊 Observer Dashboard")
+            st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
+            
+            # Demo data
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Students", "1,250")
+            with col2:
+                st.metric("Active Jobs", "45")
+            with col3:
+                st.metric("Companies", "32")
+            
+            st.divider()
+            
+            # Recent activities (demo)
+            st.subheader("Recent Activities")
+            activities = pd.DataFrame({
+                "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
+                "Activity": [
+                    "TechCorp Solutions posted new job: Frontend Developer",
+                    "John Doe (Student) applied for Software Engineer position",
+                    "IIT Bombay uploaded 250 student records",
+                    "5 interviews scheduled for Amazon positions",
+                    "Microsoft extended offers to 3 candidates"
+                ],
+                "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
+            })
+            
+            st.dataframe(activities, use_container_width=True, hide_index=True)
+
+except Exception as e:
+    st.error(f"❌ Application Error: {str(e)}")
+    with st.expander("Click to see error details"):
+        st.code(traceback.format_exc())
+    
+    st.info("""
+    **Troubleshooting Steps:**
+    1. Make sure all module files exist in the `modules/` directory
+    2. Check that `student_flow.py` has the correct methods
+    3. Verify the database connection is working
+    4. Try refreshing the page
+    """)
+
+# Debug section (collapsed by default)
+with st.expander("🔧 Debug Information", expanded=False):
+    st.write("**Session State:**")
+    st.write(f"- Demo Mode: {st.session_state.demo_mode}")
+    st.write(f"- Selected Role: {st.session_state.selected_role}")
+    st.write(f"- DB Available: {DB_AVAILABLE}")
+    st.write(f"- Modules Available: {MODULES_AVAILABLE}")
+    
+    if st.session_state.get('db_manager'):
+        st.write(f"- DB Manager exists: Yes")
+        st.write(f"- DB Connected: {hasattr(st.session_state.db_manager, 'is_connected') and st.session_state.db_manager.is_connected}")
+    
+    # Check workflow manager status
+    if st.session_state.workflow_manager:
+        st.write("**Workflow Manager Status:**")
+        if 'workflows' in st.session_state:
+            st.write(f"- Student Step: {st.session_state.workflows['student']['current_step']}")
+            st.write(f"- College Step: {st.session_state.workflows['college']['current_step']}")
+            st.write(f"- Recruiter Step: {st.session_state.workflows['recruiter']['current_step']}")
+    
+    # Quick database test
+    if st.button("Run Quick Database Test"):
+        if st.session_state.get('db_manager'):
+            try:
+                db = st.session_state.db_manager
+                st.write("**Database Test Results:**")
+                
+                # Test connection
+                st.write(f"- Connection Status: {'✅ Connected' if db.is_connected else '❌ Not Connected'}")
+                
+                if db.is_connected:
+                    # Test each table
+                    tables = ['students', 'companies', 'job_postings', 'applications', 'colleges']
+                    for table in tables:
+                        try:
+                            data = db.select(table, limit=1)
+                            st.write(f"- {table}: {'✅ Accessible' if data is not None else '❌ Not accessible'}")
+                        except:
+                            st.write(f"- {table}: ❌ Error accessing")
+            except Exception as e:
+                st.error(f"Database test failed: {e}")
+
+# Add database initialization check
+if not st.session_state.demo_mode and st.session_state.get('db_manager') and not st.session_state.db_manager.is_connected:
+    st.error("""
+    ⚠️ **Database Connection Issue**
+    
+    The app is trying to connect to the database but failed. Here are some things to check:
+    
+    1. **Internet Connection**: Make sure you're connected to the internet
+    2. **Supabase URL & Key**: Verify they are correct in supabase_manager.py
+    3. **Supabase Project**: Make sure your Supabase project is active
+    4. **Table Permissions**: Check if tables have proper RLS policies
+    5. **Firewall**: Ensure no firewall is blocking the connection
+    
+    The app will run in **Demo Mode** with sample data.
+    """)
+
+# Footer
+st.divider()
+st.markdown("""
+<div style="text-align: center">
+    <p>🎓 <b>AI Campus Placement Platform</b> | National Level Hackathon Project</p>
+    <p>Built with ❤️ using Streamlit & Python</p>
+</div>
+""", unsafe_allow_html=True)
