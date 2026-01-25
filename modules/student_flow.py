@@ -999,7 +999,7 @@ class StudentFlow:
                 desc = description.split(" - ")[1]
                 st.write(f"🔗 **[{platform}]({url})**: {desc}")
     
-    def step8_placement_tracking(self):
+        def step8_placement_tracking(self):
         """Step 8: Placement Tracking"""
         st.subheader("✅ Placement Tracking")
         st.success("🎉 Track your placement journey and applications")
@@ -1055,23 +1055,40 @@ class StudentFlow:
                 }
                 return colors.get(status, "#95a5a6")
             
-            # Display each application
+            # Display each application - FIXED: Added safe dictionary access
             for i, app in enumerate(self.student_data["job_applications"]):
-                color = status_color(app["status"])
+                # Use .get() method to safely access dictionary keys
+                company = app.get('company', 'Unknown Company')
+                position = app.get('position', 'Unknown Position')
+                date = app.get('date', 'No date')
+                status = app.get('status', 'Applied')
+                
+                color = status_color(status)
                 st.markdown(f"""
                 <div style="border-left: 4px solid {color}; padding: 10px; margin: 5px 0; background-color: #f9f9f9;">
-                    <b>{app['company']}</b> - {app['position']}<br>
-                    📅 {app['date']} | 📊 Status: <b style="color: {color};">{app['status']}</b>
+                    <b>{company}</b> - {position}<br>
+                    📅 {date} | 📊 Status: <b style="color: {color};">{status}</b>
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Statistics
+            # Statistics - FIXED: Use safe dictionary access
             st.divider()
             st.write("### 📊 Application Statistics")
             
             total_apps = len(self.student_data["job_applications"])
-            interviews = len([a for a in self.student_data["job_applications"] if "Round" in a["status"]])
-            offers = len([a for a in self.student_data["job_applications"] if a["status"] == "Offer Received"])
+            
+            # Count interviews safely
+            interviews = 0
+            for app in self.student_data["job_applications"]:
+                status = app.get('status', '')
+                if "Round" in status:
+                    interviews += 1
+            
+            # Count offers safely
+            offers = 0
+            for app in self.student_data["job_applications"]:
+                if app.get('status') == "Offer Received":
+                    offers += 1
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -1084,14 +1101,21 @@ class StudentFlow:
                 success_rate = (offers / total_apps * 100) if total_apps > 0 else 0
                 st.metric("Success Rate", f"{success_rate:.1f}%")
             
-            # Offer details
+            # Offer details - FIXED: Use safe dictionary access
             if offers > 0:
                 st.divider()
                 st.write("### 🎉 Congratulations! Offer Details")
                 
-                offers_received = [a for a in self.student_data["job_applications"] if a["status"] == "Offer Received"]
+                offers_received = []
+                for app in self.student_data["job_applications"]:
+                    if app.get('status') == "Offer Received":
+                        offers_received.append(app)
+                
                 for i, offer in enumerate(offers_received):
-                    with st.expander(f"Offer from {offer['company']}"):
+                    company = offer.get('company', 'Unknown Company')
+                    position = offer.get('position', 'Unknown Position')
+                    
+                    with st.expander(f"Offer from {company}"):
                         col1, col2 = st.columns(2)
                         with col1:
                             package = st.number_input("Package (₹ LPA)", min_value=3.0, max_value=50.0, 
@@ -1099,28 +1123,38 @@ class StudentFlow:
                             location = st.text_input("Location", value="Bangalore", key=f"loc_{i}")
                         with col2:
                             joining_date = st.date_input("Joining Date", key=f"join_{i}")
-                            st.write(f"**Position:** {offer['position']}")
+                            st.write(f"**Position:** {position}")
                         
                         if st.button("Accept Offer", key=f"accept_{i}"):
                             self.student_data["placement_status"] = {
-                                "company": offer['company'],
-                                "position": offer['position'],
+                                "company": company,
+                                "position": position,
                                 "package": package,
                                 "location": location,
                                 "joining_date": str(joining_date),
                                 "acceptance_date": datetime.now().strftime("%Y-%m-%d")
                             }
-                            st.success(f"🎉 Congratulations! You've accepted the offer from {offer['company']}!")
+                            st.success(f"🎉 Congratulations! You've accepted the offer from {company}!")
                             st.balloons()
         else:
             st.info("No applications added yet. Start by adding your first application!")
         
-        # Export data
+        # Export data - FIXED: Handle missing keys in DataFrame
         st.divider()
         if st.button("📥 Export Placement Data", key="export_data"):
             if self.student_data["job_applications"]:
-                # Create DataFrame
-                df = pd.DataFrame(self.student_data["job_applications"])
+                # Create DataFrame with safe data
+                apps_data = []
+                for app in self.student_data["job_applications"]:
+                    apps_data.append({
+                        "company": app.get('company', ''),
+                        "position": app.get('position', ''),
+                        "status": app.get('status', ''),
+                        "date": app.get('date', ''),
+                        "added_date": app.get('added_date', '')
+                    })
+                
+                df = pd.DataFrame(apps_data)
                 csv = df.to_csv(index=False)
                 
                 st.download_button(
