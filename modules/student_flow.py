@@ -346,18 +346,10 @@ class StudentFlow:
                 department = st.selectbox("Department*",
                     ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
                      "Civil Engineering", "Information Technology", "Electronics", "Others"],
-                    index=["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                          "Civil Engineering", "Information Technology", "Electronics", "Others"]
-                          .index(self.student_data["profile"]["department"]) 
-                          if self.student_data["profile"]["department"] in 
-                          ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                           "Civil Engineering", "Information Technology", "Electronics", "Others"] else 0)
+                    index=0)
                 year = st.selectbox("Year of Study*",
                     ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"],
-                    index=["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"]
-                          .index(self.student_data["profile"]["year"]) 
-                          if self.student_data["profile"]["year"] in 
-                          ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"] else 3)
+                    index=3)
                 semester = st.number_input("Current Semester*", 1, 10, 
                                           self.student_data["profile"]["semester"])
             
@@ -369,7 +361,7 @@ class StudentFlow:
                 backlogs = st.number_input("Active Backlogs", 0, 20, 
                                           self.student_data["profile"]["backlogs"])
             
-            # Skills assessment - FIXED: Removed "Communication" from technical skills
+            # Skills assessment
             st.subheader("Skills Assessment")
             technical_skills_options = ["Python", "Java", "C++", "JavaScript", "React", "Node.js", "SQL",
                                        "Machine Learning", "Data Analysis", "AWS", "Docker", "Git",
@@ -407,7 +399,7 @@ class StudentFlow:
             portfolio = st.text_input("Portfolio Website", 
                                      value=self.student_data["profile"]["portfolio_link"])
             
-            # FIXED: Added submit button
+            # Submit button
             submitted = st.form_submit_button("💾 Save Profile & Continue")
             
             if submitted:
@@ -429,7 +421,7 @@ class StudentFlow:
                         "backlogs": backlogs,
                         "technical_skills": technical_skills,
                         "career_interests": career_interests,
-                        "skills": technical_skills,  # Keep backward compatibility
+                        "skills": technical_skills,
                         "linkedin_profile": linkedin,
                         "github_profile": github,
                         "portfolio_link": portfolio,
@@ -501,7 +493,7 @@ class StudentFlow:
                                       value=self.student_data["resume"].get("achievements", ""),
                                       placeholder="List your achievements, awards, etc.")
             
-            # FIXED: Added submit button
+            # Submit button
             submitted = st.form_submit_button("💾 Generate Resume Preview")
             
             if submitted:
@@ -572,7 +564,7 @@ class StudentFlow:
         else:
             st.success("✅ You have sufficient credits for graduation")
         
-        # FIXED: Added proper button (not in form)
+        # Save button
         if st.button("💾 Save Course Plan", key="save_course_plan"):
             self.student_data["courses"] = {
                 "major_courses": major_courses,
@@ -632,7 +624,7 @@ class StudentFlow:
                 filtered_internships.append(intern)
         
         if not filtered_internships:
-            filtered_internships = internships[:2]  # Show some anyway
+            filtered_internships = internships[:2]
         
         st.write(f"**Found {len(filtered_internships)} internship opportunities**")
         
@@ -721,17 +713,14 @@ class StudentFlow:
                                        self.student_data["career_plan"].get("target_role", "Software Development Engineer"))
             timeline = st.selectbox("Timeline", 
                                    ["6 months", "1 year", "2 years", "3 years", "5 years"],
-                                   index=["6 months", "1 year", "2 years", "3 years", "5 years"]
-                                          .index(self.student_data["career_plan"].get("timeline", "1 year"))
-                                          if self.student_data["career_plan"].get("timeline") in 
-                                          ["6 months", "1 year", "2 years", "3 years", "5 years"] else 1)
+                                   index=1)
         with col2:
             target_company = st.text_input("Target Companies (comma-separated)",
                                           value=", ".join(self.student_data["career_plan"].get("target_company", ["Google", "Microsoft", "Amazon"])))
             desired_package = st.number_input("Desired Package (₹ LPA)", 5.0, 50.0, 
                                              float(self.student_data["career_plan"].get("desired_package", 12.0)), 1.0)
         
-        # FIXED: Added proper button (not in form)
+        # Save button
         if st.button("🎯 Save Career Goals", key="save_career_goals"):
             self.student_data["career_plan"] = {
                 "target_role": target_role,
@@ -770,7 +759,7 @@ class StudentFlow:
             coding_rating = st.slider("Coding Proficiency (1-10)", 1, 10, 7, step=1, key="coding_slider")
             communication_rating = st.slider("Communication Skills (1-10)", 1, 10, 7, step=1, key="comm_slider")
         
-        # Predict button - FIXED: Not in form
+        # Predict button
         if st.button("🤖 Predict Placement Chances", key="predict_button"):
             # Enhanced prediction algorithm
             base_score = 40
@@ -1018,7 +1007,7 @@ class StudentFlow:
         # Application tracker
         st.write("### 📋 Application Tracker")
         
-        # Add new application - FIXED: Added form with submit button
+        # Add new application
         with st.expander("➕ Add New Application", expanded=True):
             with st.form("add_application_form"):
                 col1, col2 = st.columns(2)
@@ -1032,7 +1021,6 @@ class StudentFlow:
                                              key="new_status")
                     new_date = st.date_input("Application Date", key="new_date")
                 
-                # FIXED: Added submit button
                 submitted = st.form_submit_button("Add Application")
                 
                 if submitted:
@@ -1150,7 +1138,7 @@ class StudentFlow:
         if st.button("🔄 Start New Journey", key="restart_journey"):
             # Reset student data
             self.student_data = {
-                "profile": self.student_data["profile"],  # Keep profile
+                "profile": self.student_data["profile"],
                 "education": [],
                 "resume": {},
                 "courses": {},
@@ -1170,8 +1158,45 @@ class StudentFlow:
         """Preview the resume"""
         profile = self.student_data.get("profile", {})
         resume = self.student_data.get("resume", {})
-        education = self.student_data.get("education", [{}])[0] if self.student_data.get("education") else {}
         
+        # Get education data safely
+        education_data = resume.get("education", {})
+        if not education_data and self.student_data.get("education"):
+            if self.student_data["education"] and isinstance(self.student_data["education"][0], dict):
+                education_data = self.student_data["education"][0]
+        
+        # Get degree
+        degree = "Degree"
+        if education_data:
+            if isinstance(education_data, dict):
+                degree = education_data.get("degree", "Degree")
+        
+        # Get college/institution
+        college = "College"
+        if education_data:
+            if isinstance(education_data, dict):
+                college = education_data.get("college", education_data.get("institution", "College"))
+        
+        # Get graduation year
+        graduation_year = "Year"
+        if education_data:
+            if isinstance(education_data, dict):
+                graduation_year = education_data.get("graduation_year", education_data.get("year", "Year"))
+        
+        # Get skills
+        skills = resume.get("skills", [])
+        if not skills:
+            skills = profile.get("technical_skills", ["Skills"])
+        
+        # Get project data
+        projects = resume.get("projects", [{}])
+        project_title = "Project Title"
+        project_desc = "Project description"
+        if projects and isinstance(projects[0], dict):
+            project_title = projects[0].get("title", "Project Title")
+            project_desc = projects[0].get("description", "Project description")
+        
+        # Build HTML
         html = f"""
         <div style="font-family: Arial, sans-serif; padding: 25px; border: 2px solid #3498db; border-radius: 15px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <div style="text-align: center; border-bottom: 3px solid #3498db; padding-bottom: 15px; margin-bottom: 20px;">
@@ -1184,23 +1209,23 @@ class StudentFlow:
             
             <div style="margin-bottom: 20px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">🎓 Education</h2>
-                <p style="margin: 5px 0;"><strong>{resume.get('education', {{}}).get('degree', education.get('degree', 'Degree'))}</strong></p>
+                <p style="margin: 5px 0;"><strong>{degree}</strong></p>
                 <p style="margin: 5px 0; color: #555;">
-                    {resume.get('education', {{}}).get('college', education.get('institution', 'College'))} | 
+                    {college} | 
                     CGPA: {profile.get('cgpa', 'N/A')} | 
-                    Graduation: {resume.get('education', {{}}).get('graduation_year', education.get('year', 'Year'))}
+                    Graduation: {graduation_year}
                 </p>
             </div>
             
             <div style="margin-bottom: 20px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">🛠️ Skills</h2>
-                <p style="margin: 5px 0;">{', '.join(resume.get('skills', profile.get('technical_skills', ['Skills'])))}</p>
+                <p style="margin: 5px 0;">{', '.join(skills)}</p>
             </div>
             
             <div style="margin-bottom: 20px;">
                 <h2 style="color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px;">💼 Projects</h2>
-                <p style="margin: 5px 0;"><strong>{resume.get('projects', [{{}}])[0].get('title', 'Project Title')}</strong></p>
-                <p style="margin: 5px 0; color: #555;">{resume.get('projects', [{{}}])[0].get('description', 'Project description')}</p>
+                <p style="margin: 5px 0;"><strong>{project_title}</strong></p>
+                <p style="margin: 5px 0; color: #555;">{project_desc}</p>
             </div>
         </div>
         """
@@ -1221,19 +1246,19 @@ class StudentFlow:
             
             EDUCATION
             ---------
-            {resume.get('education', {{}}).get('degree', '')}
-            {resume.get('education', {{}}).get('college', '')}
+            {degree}
+            {college}
             CGPA: {profile.get('cgpa', '')}
-            Graduation: {resume.get('education', {{}}).get('graduation_year', '')}
+            Graduation: {graduation_year}
             
             SKILLS
             ------
-            {', '.join(resume.get('skills', []))}
+            {', '.join(skills)}
             
             PROJECTS
             --------
-            {resume.get('projects', [{{}}])[0].get('title', '')}
-            {resume.get('projects', [{{}}])[0].get('description', '')}
+            {project_title}
+            {project_desc}
             """
             
             st.download_button(
