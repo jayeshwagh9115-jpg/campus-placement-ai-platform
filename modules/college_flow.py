@@ -31,7 +31,7 @@ class CollegeFlow:
                 "contact_email": "placement@abcengg.edu",
                 "contact_phone": "+91 9876543210",
                 "placement_officer": "Dr. Placement Officer",
-                "departments": ["Computer Science", "Electrical Engineering", "Mechanical Engineering", "Civil Engineering", "Information Technology"],
+                "departments": ["Computer Science", "Electrical", "Mechanical", "Civil", "Information Technology"],
                 "accreditation": "NAAC A",
                 "established_year": "2000"
             },
@@ -49,8 +49,7 @@ class CollegeFlow:
         np.random.seed(42)
         n_students = 150
         
-        departments = ["Computer Science", "Electrical Engineering", 
-                      "Mechanical Engineering", "Civil Engineering", "Information Technology"]
+        departments = ["Computer Science", "Electrical", "Mechanical", "Civil", "Information Technology"]
         years = [2022, 2023, 2024]
         
         data = []
@@ -162,7 +161,7 @@ class CollegeFlow:
                 "placement_id": f"P{i+1:04d}",
                 "student_id": f"S{np.random.randint(1000, 1150):04d}",
                 "student_name": f"Student {i+151}",
-                "department": np.random.choice(["Computer Science", "Electrical", "Mechanical", "Civil", "IT"]),
+                "department": np.random.choice(["Computer Science", "Electrical", "Mechanical", "Civil", "Information Technology"]),
                 "company": companies[i % len(companies)],
                 "job_role": np.random.choice(["Software Engineer", "Data Scientist", "Product Manager", 
                                             "Business Analyst", "DevOps Engineer"]),
@@ -311,6 +310,14 @@ class CollegeFlow:
         """Step 1: College Profile Setup"""
         st.info("Setup and manage your college profile information")
         
+        # Department options - make sure they match what's in college_data
+        department_options = [
+            "Computer Science", "Electrical", "Mechanical", "Civil",
+            "Information Technology", "Electronics", "Chemical", 
+            "Biotechnology", "Mathematics", "Physics", "Chemistry", 
+            "Humanities", "Others"
+        ]
+        
         with st.form("college_profile_form"):
             col1, col2 = st.columns(2)
             
@@ -331,18 +338,17 @@ class CollegeFlow:
                 placement_officer = st.text_input("Placement Officer*", 
                                                  value=self.college_data["profile"]["placement_officer"])
             
-            # Departments
+            # Departments - filter only valid departments that exist in options
             st.subheader("🎓 Departments")
-            department_options = [
-                "Computer Science", "Electronics", "Mechanical", "Civil",
-                "Electrical", "Chemical", "Biotechnology", "Mathematics",
-                "Physics", "Chemistry", "Humanities", "Others"
-            ]
+            
+            # Get current departments and filter to only valid ones
+            current_departments = self.college_data["profile"]["departments"]
+            valid_current_departments = [dept for dept in current_departments if dept in department_options]
             
             selected_departments = st.multiselect(
                 "Select Departments",
                 department_options,
-                default=self.college_data["profile"]["departments"]
+                default=valid_current_departments
             )
             
             # Additional Info
@@ -678,7 +684,7 @@ class CollegeFlow:
                 company_requirements = {
                     "min_cgpa": 7.5,
                     "max_backlogs": 1,
-                    "preferred_departments": ["Computer Science", "Information Technology", "Electrical Engineering"],
+                    "preferred_departments": ["Computer Science", "Information Technology", "Electrical"],
                     "skills": ["Python", "Java", "SQL"]
                 }
                 
@@ -909,8 +915,11 @@ class CollegeFlow:
     
     def get_student_name(self, student_id):
         """Get student name by ID"""
-        student = self.college_data["students"][self.college_data["students"]["student_id"] == student_id]
-        return student["name"].iloc[0] if not student.empty else "Unknown"
+        if not self.college_data["students"].empty:
+            student = self.college_data["students"][self.college_data["students"]["student_id"] == student_id]
+            if not student.empty:
+                return student["name"].iloc[0]
+        return "Unknown"
     
     def display_college_summary(self):
         """Display college profile summary"""
