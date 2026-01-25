@@ -10,7 +10,7 @@ import traceback
 class StudentFlow:
     def __init__(self):
         self.current_step = 1
-        self.total_steps = 8  # Changed to 8 steps to match workflow
+        self.total_steps = 8
         self.db_manager = None
         self.demo_mode = True
         
@@ -79,7 +79,7 @@ class StudentFlow:
                 "cgpa": 8.5,
                 "backlogs": 0,
                 "skills": ["Python", "Java", "SQL", "React", "Machine Learning"],
-                "technical_skills": ["Python", "Machine Learning", "Data Analysis", "SQL", "Communication"],
+                "technical_skills": ["Python", "Machine Learning", "Data Analysis", "SQL"],
                 "career_interests": ["Software Development", "Data Science", "Product Management"],
                 "resume_url": "",
                 "profile_picture_url": "https://randomuser.me/api/portraits/men/32.jpg",
@@ -110,7 +110,7 @@ class StudentFlow:
                         "technologies": ["Python", "Streamlit", "Supabase", "Machine Learning"]
                     }
                 ],
-                "skills": ["Python", "Machine Learning", "Data Analysis", "SQL", "Communication"]
+                "skills": ["Python", "Machine Learning", "Data Analysis", "SQL"]
             },
             "courses": {
                 "major_courses": ["Data Structures", "Algorithms", "Database Systems"],
@@ -369,21 +369,34 @@ class StudentFlow:
                 backlogs = st.number_input("Active Backlogs", 0, 20, 
                                           self.student_data["profile"]["backlogs"])
             
-            # Skills assessment
+            # Skills assessment - FIXED: Removed "Communication" from technical skills
             st.subheader("Skills Assessment")
+            technical_skills_options = ["Python", "Java", "C++", "JavaScript", "React", "Node.js", "SQL",
+                                       "Machine Learning", "Data Analysis", "AWS", "Docker", "Git",
+                                       "Flutter", "Android", "iOS", "PHP", "Angular", "Vue.js", "TypeScript",
+                                       "MongoDB", "PostgreSQL", "Redis", "Kubernetes", "Terraform"]
+            
+            # Filter demo skills to only include valid options
+            valid_default_skills = [skill for skill in self.student_data["profile"]["technical_skills"] 
+                                  if skill in technical_skills_options]
+            
             technical_skills = st.multiselect("Technical Skills*",
-                ["Python", "Java", "C++", "JavaScript", "React", "Node.js", "SQL",
-                 "Machine Learning", "Data Analysis", "AWS", "Docker", "Git",
-                 "Flutter", "Android", "iOS", "PHP", "Angular", "Vue.js"],
-                default=self.student_data["profile"]["technical_skills"])
+                technical_skills_options,
+                default=valid_default_skills)
             
             # Career interests
             st.subheader("Career Interests")
+            career_interests_options = ["Software Development", "Data Science", "Product Management",
+                                       "Research", "Consulting", "Entrepreneurship", "Higher Studies",
+                                       "Web Development", "Mobile Development", "DevOps", "Cloud Computing",
+                                       "UI/UX Design", "Cybersecurity", "AI/ML Engineering"]
+            
+            valid_default_interests = [interest for interest in self.student_data["profile"]["career_interests"] 
+                                     if interest in career_interests_options]
+            
             career_interests = st.multiselect("Areas of Interest*",
-                ["Software Development", "Data Science", "Product Management",
-                 "Research", "Consulting", "Entrepreneurship", "Higher Studies",
-                 "Web Development", "Mobile Development", "DevOps", "Cloud Computing"],
-                default=self.student_data["profile"]["career_interests"])
+                career_interests_options,
+                default=valid_default_interests)
             
             # Social Links
             st.subheader("🔗 Social Links")
@@ -394,7 +407,10 @@ class StudentFlow:
             portfolio = st.text_input("Portfolio Website", 
                                      value=self.student_data["profile"]["portfolio_link"])
             
-            if st.form_submit_button("💾 Save Profile & Continue", width='stretch'):
+            # FIXED: Added submit button
+            submitted = st.form_submit_button("💾 Save Profile & Continue")
+            
+            if submitted:
                 # Validate required fields
                 if not all([full_name, email, roll_number, department, year]):
                     st.error("Please fill in all required fields (*)")
@@ -475,16 +491,20 @@ class StudentFlow:
             
             # Skills
             st.write("**Skills**")
+            skills_text = ", ".join(self.student_data["resume"].get("skills", self.student_data["profile"].get("technical_skills", ["Python", "SQL"])))
             skills = st.text_area("Your Skills (comma-separated)", 
-                                 ", ".join(self.student_data["resume"].get("skills", ["Python", "Machine Learning", "Data Analysis", "SQL", "Communication"])))
+                                 skills_text)
             
             # Achievements
             st.write("**Achievements**")
             achievements = st.text_area("Academic/Extracurricular Achievements",
-                                      value="",
+                                      value=self.student_data["resume"].get("achievements", ""),
                                       placeholder="List your achievements, awards, etc.")
             
-            if st.form_submit_button("💾 Generate Resume Preview", width='stretch'):
+            # FIXED: Added submit button
+            submitted = st.form_submit_button("💾 Generate Resume Preview")
+            
+            if submitted:
                 self.student_data["resume"] = {
                     "education": {
                         "college": college,
@@ -529,10 +549,13 @@ class StudentFlow:
             major_options,
             default=self.student_data["courses"].get("major_courses", ["Data Structures", "Algorithms"]))
         
+        minor_index = 0
+        if self.student_data["courses"].get("minor") in minor_options:
+            minor_index = minor_options.index(self.student_data["courses"].get("minor"))
+        
         minor_selected = st.selectbox("Minor Specialization", 
                                      minor_options,
-                                     index=minor_options.index(self.student_data["courses"].get("minor", "Data Science")) 
-                                     if self.student_data["courses"].get("minor") in minor_options else 0)
+                                     index=minor_index)
         
         skill_courses = st.multiselect("Skill Enhancement Courses",
             ["Entrepreneurship", "Communication Skills", "Research Methodology", "Project Management",
@@ -549,7 +572,8 @@ class StudentFlow:
         else:
             st.success("✅ You have sufficient credits for graduation")
         
-        if st.button("💾 Save Course Plan", width='stretch'):
+        # FIXED: Added proper button (not in form)
+        if st.button("💾 Save Course Plan", key="save_course_plan"):
             self.student_data["courses"] = {
                 "major_courses": major_courses,
                 "minor": minor_selected,
@@ -621,7 +645,7 @@ class StudentFlow:
                 with col2:
                     st.metric("Match Score", intern['match'])
                 
-                if st.button(f"Apply to {intern['company']}", key=f"apply_{intern['company']}", width='stretch'):
+                if st.button(f"Apply to {intern['company']}", key=f"apply_{intern['company']}"):
                     # Add to applications
                     application = {
                         "company": intern['company'],
@@ -669,7 +693,7 @@ class StudentFlow:
                 "path": "Associate PM → Product Manager → Senior PM → Director of Product",
                 "skills_needed": ["Communication", "Market Analysis", "Strategy", "User Research"],
                 "avg_package": "10-18 LPA (Entry) → 35-60+ LPA (Senior)",
-                "match": "80%" if "Communication" in profile.get("technical_skills", []) else "60%"
+                "match": "80%" if "Communication" in str(profile.get("skills", [])) else "60%"
             })
         
         # Display recommendations
@@ -703,10 +727,12 @@ class StudentFlow:
                                           ["6 months", "1 year", "2 years", "3 years", "5 years"] else 1)
         with col2:
             target_company = st.text_input("Target Companies (comma-separated)",
-                                          value="Google, Microsoft, Amazon")
-            desired_package = st.number_input("Desired Package (₹ LPA)", 5.0, 50.0, 12.0, 1.0)
+                                          value=", ".join(self.student_data["career_plan"].get("target_company", ["Google", "Microsoft", "Amazon"])))
+            desired_package = st.number_input("Desired Package (₹ LPA)", 5.0, 50.0, 
+                                             float(self.student_data["career_plan"].get("desired_package", 12.0)), 1.0)
         
-        if st.button("🎯 Save Career Goals", width='stretch'):
+        # FIXED: Added proper button (not in form)
+        if st.button("🎯 Save Career Goals", key="save_career_goals"):
             self.student_data["career_plan"] = {
                 "target_role": target_role,
                 "timeline": timeline,
@@ -729,23 +755,23 @@ class StudentFlow:
         with col1:
             cgpa = st.slider("CGPA", 0.0, 10.0, 
                             float(profile.get("cgpa", 7.5)), 
-                            step=0.1)
+                            step=0.1, key="cgpa_slider")
             projects_count = st.slider("Number of Projects", 0, 10, 
                                       len(self.student_data.get("projects", [])), 
-                                      step=1)
+                                      step=1, key="projects_slider")
             internships_count = st.slider("Number of Internships", 0, 5, 
                                          len(self.student_data.get("internships", [])), 
-                                         step=1)
+                                         step=1, key="internships_slider")
         
         with col2:
             skills_count = st.slider("Number of Skills", 0, 20, 
                                     len(profile.get("technical_skills", [])), 
-                                    step=1)
-            coding_rating = st.slider("Coding Proficiency (1-10)", 1, 10, 7, step=1)
-            communication_rating = st.slider("Communication Skills (1-10)", 1, 10, 7, step=1)
+                                    step=1, key="skills_slider")
+            coding_rating = st.slider("Coding Proficiency (1-10)", 1, 10, 7, step=1, key="coding_slider")
+            communication_rating = st.slider("Communication Skills (1-10)", 1, 10, 7, step=1, key="comm_slider")
         
-        # Predict button
-        if st.button("🤖 Predict Placement Chances", width='stretch'):
+        # Predict button - FIXED: Not in form
+        if st.button("🤖 Predict Placement Chances", key="predict_button"):
             # Enhanced prediction algorithm
             base_score = 40
             
@@ -872,7 +898,7 @@ class StudentFlow:
                 topics = technical_topics.get(role, ["General Computer Science"])
                 st.write(f"**Key topics for {role}:**")
                 
-                selected_topic = st.selectbox("Select topic to practice:", topics)
+                selected_topic = st.selectbox("Select topic to practice:", topics, key="tech_topic_select")
                 
                 if selected_topic:
                     st.write(f"**Sample Questions for {selected_topic}:**")
@@ -930,7 +956,7 @@ class StudentFlow:
                     answer = st.text_area("Your answer:", key=f"hr_{question}", height=120)
                     tips = st.text_area("AI Tips (edit as needed):", 
                                        value="• Structure your answer: Situation-Action-Result\n• Be specific with examples\n• Connect to company values\n• Show enthusiasm for the role",
-                                       height=100)
+                                       height=100, key=f"tips_{question}")
                     
                     if st.button("Get AI Feedback", key=f"feedback_{question}"):
                         if len(answer) > 50:
@@ -964,7 +990,6 @@ class StudentFlow:
                 with col3:
                     if st.button("Start", key=f"start_{test['name']}"):
                         st.info(f"Starting {test['name']}...")
-                        st.session_state[f"test_{test['name']}"] = "in_progress"
         
         with tab4:
             st.write("### Learning Resources")
@@ -981,7 +1006,9 @@ class StudentFlow:
             }
             
             for platform, description in resources.items():
-                st.write(f"🔗 **[{platform}]({description.split(' - ')[0]})**: {description.split(' - ')[1]}")
+                url = description.split(" - ")[0]
+                desc = description.split(" - ")[1]
+                st.write(f"🔗 **[{platform}]({url})**: {desc}")
     
     def step8_placement_tracking(self):
         """Step 8: Placement Tracking"""
@@ -991,36 +1018,41 @@ class StudentFlow:
         # Application tracker
         st.write("### 📋 Application Tracker")
         
-        # Add new application
+        # Add new application - FIXED: Added form with submit button
         with st.expander("➕ Add New Application", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_company = st.text_input("Company Name")
-                new_position = st.text_input("Position")
-            with col2:
-                new_status = st.selectbox("Status", 
-                                         ["Applied", "Under Review", "Online Test", 
-                                          "Technical Round", "HR Round", "Offer Received", "Rejected"])
-                new_date = st.date_input("Application Date")
-            
-            if st.button("Add Application") and new_company and new_position:
-                application = {
-                    "company": new_company,
-                    "position": new_position,
-                    "status": new_status,
-                    "date": str(new_date),
-                    "added_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-                self.student_data["job_applications"].append(application)
-                st.success(f"Added application to {new_company}")
-                st.rerun()
+            with st.form("add_application_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_company = st.text_input("Company Name", key="new_company")
+                    new_position = st.text_input("Position", key="new_position")
+                with col2:
+                    new_status = st.selectbox("Status", 
+                                             ["Applied", "Under Review", "Online Test", 
+                                              "Technical Round", "HR Round", "Offer Received", "Rejected"],
+                                             key="new_status")
+                    new_date = st.date_input("Application Date", key="new_date")
+                
+                # FIXED: Added submit button
+                submitted = st.form_submit_button("Add Application")
+                
+                if submitted:
+                    if new_company and new_position:
+                        application = {
+                            "company": new_company,
+                            "position": new_position,
+                            "status": new_status,
+                            "date": str(new_date),
+                            "added_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        self.student_data["job_applications"].append(application)
+                        st.success(f"Added application to {new_company}")
+                        st.rerun()
+                    else:
+                        st.error("Please fill in Company Name and Position")
         
         # Display applications
         if self.student_data["job_applications"]:
             st.write("#### Your Applications")
-            
-            # Convert to DataFrame for better display
-            apps_df = pd.DataFrame(self.student_data["job_applications"])
             
             # Add color coding for status
             def status_color(status):
@@ -1070,18 +1102,18 @@ class StudentFlow:
                 st.write("### 🎉 Congratulations! Offer Details")
                 
                 offers_received = [a for a in self.student_data["job_applications"] if a["status"] == "Offer Received"]
-                for offer in offers_received:
+                for i, offer in enumerate(offers_received):
                     with st.expander(f"Offer from {offer['company']}"):
                         col1, col2 = st.columns(2)
                         with col1:
                             package = st.number_input("Package (₹ LPA)", min_value=3.0, max_value=50.0, 
-                                                     value=12.0, step=0.5, key=f"package_{offer['company']}")
-                            location = st.text_input("Location", value="Bangalore", key=f"loc_{offer['company']}")
+                                                     value=12.0, step=0.5, key=f"package_{i}")
+                            location = st.text_input("Location", value="Bangalore", key=f"loc_{i}")
                         with col2:
-                            joining_date = st.date_input("Joining Date", key=f"join_{offer['company']}")
+                            joining_date = st.date_input("Joining Date", key=f"join_{i}")
                             st.write(f"**Position:** {offer['position']}")
                         
-                        if st.button("Accept Offer", key=f"accept_{offer['company']}"):
+                        if st.button("Accept Offer", key=f"accept_{i}"):
                             self.student_data["placement_status"] = {
                                 "company": offer['company'],
                                 "position": offer['position'],
@@ -1097,7 +1129,7 @@ class StudentFlow:
         
         # Export data
         st.divider()
-        if st.button("📥 Export Placement Data", width='stretch'):
+        if st.button("📥 Export Placement Data", key="export_data"):
             if self.student_data["job_applications"]:
                 # Create DataFrame
                 df = pd.DataFrame(self.student_data["job_applications"])
@@ -1107,14 +1139,15 @@ class StudentFlow:
                     label="Download CSV",
                     data=csv,
                     file_name="placement_applications.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    key="download_csv"
                 )
             else:
                 st.warning("No data to export")
         
         # Restart option
         st.divider()
-        if st.button("🔄 Start New Journey", width='stretch'):
+        if st.button("🔄 Start New Journey", key="restart_journey"):
             # Reset student data
             self.student_data = {
                 "profile": self.student_data["profile"],  # Keep profile
@@ -1175,7 +1208,7 @@ class StudentFlow:
         st.markdown(html, unsafe_allow_html=True)
         
         # Download button
-        if st.button("📄 Download Resume (Text)", width='stretch'):
+        if st.button("📄 Download Resume (Text)", key="download_resume"):
             resume_text = f"""
             RESUME
             ======
@@ -1207,7 +1240,8 @@ class StudentFlow:
                 label="📥 Download Resume",
                 data=resume_text,
                 file_name=f"resume_{profile.get('full_name', 'student')}.txt",
-                mime="text/plain"
+                mime="text/plain",
+                key="download_resume_file"
             )
     
     def display_progress_bar(self):
@@ -1251,18 +1285,3 @@ class StudentFlow:
             
             if profile['technical_skills']:
                 st.write(f"**Technical Skills:** {', '.join(profile['technical_skills'])}")
-    
-    def display_workflow_navigation(self, current_step):
-        """Display navigation buttons"""
-        st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", width='stretch'):
-                st.session_state.current_step_student = current_step - 1
-                st.rerun()
-        
-        with col3:
-            if current_step < self.total_steps and st.button("Next Step ➡️", width='stretch'):
-                st.session_state.current_step_student = current_step + 1
-                st.rerun()
