@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import traceback
-import random  # Added for debug function
-
-# TEMPORARY DEBUG FIX - Add this near the top
+import random
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 def debug_database_save():
     """Debug function to test database save"""
@@ -117,14 +117,16 @@ else:
     st.session_state.recruiter_flow = None
 
 # Initialize session state variables
-if 'recruiter_step' not in st.session_state:
-    st.session_state.recruiter_step = 1
-    
 if 'selected_role' not in st.session_state:
     st.session_state.selected_role = None
 
-# CRITICAL FIX: Remove old step variables since we're using workflow manager
-# The workflow manager will handle step states
+# Initialize workflow steps if not exists
+if 'workflows' not in st.session_state:
+    st.session_state.workflows = {
+        "student": {"current_step": 1},
+        "college": {"current_step": 1},
+        "recruiter": {"current_step": 1}
+    }
 
 # Title and description
 st.title("🎓 AI-Powered Campus Placement Management System")
@@ -229,30 +231,23 @@ try:
             st.error("Student flow module not initialized")
             st.stop()
         
-        # FIXED: Get current step from workflow manager's session state
-        if 'workflows' in st.session_state:
-            current_step = st.session_state.workflows["student"]["current_step"]
-        else:
-            current_step = 1  # Default to step 1
+        # Get current step from workflow
+        current_step = st.session_state.workflows["student"]["current_step"]
         
-        # SAFE METHOD: Check if set_database_manager exists before calling
+        # Set database manager for student flow
         if not st.session_state.demo_mode and st.session_state.get('db_manager'):
             if hasattr(st.session_state.student_flow, 'set_database_manager'):
-                # Use the new method if it exists
                 st.session_state.student_flow.set_database_manager(
                     st.session_state.db_manager, 
                     st.session_state.demo_mode
                 )
             elif hasattr(st.session_state.student_flow, 'db_manager'):
-                # Fallback to old method (set attribute directly)
                 st.session_state.student_flow.db_manager = st.session_state.db_manager
                 if hasattr(st.session_state.student_flow, 'demo_mode'):
                     st.session_state.student_flow.demo_mode = st.session_state.demo_mode
             else:
-                # If neither method exists, just set as attribute
                 st.session_state.student_flow.db_manager = st.session_state.db_manager
         else:
-            # Demo mode - set to None
             if hasattr(st.session_state.student_flow, 'set_database_manager'):
                 st.session_state.student_flow.set_database_manager(None, True)
             elif hasattr(st.session_state.student_flow, 'db_manager'):
@@ -269,14 +264,14 @@ try:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if st.button("◀ Previous Step", key="main_student_prev", disabled=(current_step <= 1)):
-                if 'workflows' in st.session_state and current_step > 1:
+                if current_step > 1:
                     st.session_state.workflows["student"]["current_step"] -= 1
                     st.rerun()
         with col2:
             st.write(f"**Step {current_step} of 8**")
         with col3:
             if st.button("Next Step ▶", key="main_student_next", disabled=(current_step >= 8)):
-                if 'workflows' in st.session_state and current_step < 8:
+                if current_step < 8:
                     st.session_state.workflows["student"]["current_step"] += 1
                     st.rerun()
         
@@ -285,13 +280,10 @@ try:
             st.error("College flow module not initialized")
             st.stop()
         
-        # FIXED: Get current step from workflow manager's session state
-        if 'workflows' in st.session_state:
-            current_step = st.session_state.workflows["college"]["current_step"]
-        else:
-            current_step = 1  # Default to step 1
+        # Get current step from workflow
+        current_step = st.session_state.workflows["college"]["current_step"]
         
-        # SAFE METHOD for college flow too
+        # Set database manager for college flow
         if not st.session_state.demo_mode and st.session_state.get('db_manager'):
             if hasattr(st.session_state.college_flow, 'set_database_manager'):
                 st.session_state.college_flow.set_database_manager(
@@ -321,14 +313,14 @@ try:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if st.button("◀ Previous Step", key="main_college_prev", disabled=(current_step <= 1)):
-                if 'workflows' in st.session_state and current_step > 1:
+                if current_step > 1:
                     st.session_state.workflows["college"]["current_step"] -= 1
                     st.rerun()
         with col2:
             st.write(f"**Step {current_step} of 8**")
         with col3:
             if st.button("Next Step ▶", key="main_college_next", disabled=(current_step >= 8)):
-                if 'workflows' in st.session_state and current_step < 8:
+                if current_step < 8:
                     st.session_state.workflows["college"]["current_step"] += 1
                     st.rerun()
         
@@ -337,7 +329,10 @@ try:
             st.error("Recruiter flow module not initialized")
             st.stop()
         
-        # For recruiter flow
+        # Get current step from workflow
+        current_step = st.session_state.workflows["recruiter"]["current_step"]
+        
+        # Set database manager for recruiter flow
         if not st.session_state.demo_mode and st.session_state.get('db_manager'):
             if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
                 st.session_state.recruiter_flow.set_database_manager(
@@ -358,12 +353,6 @@ try:
                 if hasattr(st.session_state.recruiter_flow, 'demo_mode'):
                     st.session_state.recruiter_flow.demo_mode = True
         
-        # Get current step from workflow manager
-        if 'workflows' in st.session_state:
-            current_step = st.session_state.workflows["recruiter"]["current_step"]
-        else:
-            current_step = st.session_state.recruiter_step
-        
         # Display recruiter flow with current step
         st.session_state.recruiter_flow.display(current_step)
         
@@ -372,14 +361,14 @@ try:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if st.button("◀ Previous Step", key="main_recruiter_prev", disabled=(current_step <= 1)):
-                if 'workflows' in st.session_state and current_step > 1:
+                if current_step > 1:
                     st.session_state.workflows["recruiter"]["current_step"] -= 1
                     st.rerun()
         with col2:
             st.write(f"**Step {current_step} of 8**")
         with col3:
             if st.button("Next Step ▶", key="main_recruiter_next", disabled=(current_step >= 8)):
-                if 'workflows' in st.session_state and current_step < 8:
+                if current_step < 8:
                     st.session_state.workflows["recruiter"]["current_step"] += 1
                     st.rerun()
         
@@ -445,11 +434,10 @@ with st.expander("🔧 Debug Information", expanded=False):
         st.write(f"- DB Connected: {hasattr(st.session_state.db_manager, 'is_connected') and st.session_state.db_manager.is_connected}")
     
     # Check workflow status
-    if 'workflows' in st.session_state:
-        st.write("**Workflow Status:**")
-        st.write(f"- Student Step: {st.session_state.workflows['student']['current_step']}")
-        st.write(f"- College Step: {st.session_state.workflows['college']['current_step']}")
-        st.write(f"- Recruiter Step: {st.session_state.workflows['recruiter']['current_step']}")
+    st.write("**Workflow Status:**")
+    st.write(f"- Student Step: {st.session_state.workflows['student']['current_step']}")
+    st.write(f"- College Step: {st.session_state.workflows['college']['current_step']}")
+    st.write(f"- Recruiter Step: {st.session_state.workflows['recruiter']['current_step']}")
     
     # Check student_flow attributes
     if st.session_state.student_flow:
@@ -482,11 +470,14 @@ with st.expander("🔧 Debug Information", expanded=False):
     
     # Reset workflow button
     if st.button("🔄 Reset All Workflow Steps"):
-        if 'workflows' in st.session_state:
-            st.session_state.workflows["student"]["current_step"] = 1
-            st.session_state.workflows["college"]["current_step"] = 1
-            st.session_state.workflows["recruiter"]["current_step"] = 1
-            st.rerun()
+        st.session_state.workflows["student"]["current_step"] = 1
+        st.session_state.workflows["college"]["current_step"] = 1
+        st.session_state.workflows["recruiter"]["current_step"] = 1
+        st.rerun()
+        
+    # Debug database save button
+    if st.button("🔧 Test Database Save"):
+        debug_database_save()
 
 # Add database initialization check
 if not st.session_state.demo_mode and st.session_state.get('db_manager') and not st.session_state.db_manager.is_connected:
