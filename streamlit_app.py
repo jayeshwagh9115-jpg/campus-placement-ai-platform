@@ -3,9 +3,14 @@ import pandas as pd
 import traceback
 import random
 import logging
+import sys
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+
+# Add modules directory to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'modules'))
 
 def debug_database_save():
     """Debug function to test database save"""
@@ -60,19 +65,54 @@ def debug_database_save():
 try:
     from database.supabase_manager import SupabaseManager
     DB_AVAILABLE = True
+    print("✅ SupabaseManager imported successfully")
 except ImportError as e:
     DB_AVAILABLE = False
-    st.warning(f"Supabase module not available: {e}")
+    print(f"⚠️ Supabase module not available: {e}")
+
+# Try to import modules with better error handling
+MODULES_AVAILABLE = False
+modules_status = {}
 
 try:
     from modules.workflow_manager import WorkflowManager
-    from modules.student_flow import StudentFlow
-    from modules.college_flow import CollegeFlow
-    from modules.recruiter_flow import RecruiterFlow
-    MODULES_AVAILABLE = True
+    modules_status['workflow_manager'] = True
+    print("✅ WorkflowManager imported successfully")
 except ImportError as e:
+    modules_status['workflow_manager'] = False
+    print(f"❌ Failed to import workflow_manager: {e}")
+
+try:
+    from modules.student_flow import StudentFlow
+    modules_status['student_flow'] = True
+    print("✅ StudentFlow imported successfully")
+except ImportError as e:
+    modules_status['student_flow'] = False
+    print(f"❌ Failed to import student_flow: {e}")
+
+try:
+    from modules.college_flow import CollegeFlow
+    modules_status['college_flow'] = True
+    print("✅ CollegeFlow imported successfully")
+except ImportError as e:
+    modules_status['college_flow'] = False
+    print(f"❌ Failed to import college_flow: {e}")
+
+try:
+    from modules.recruiter_flow import RecruiterFlow
+    modules_status['recruiter_flow'] = True
+    print("✅ RecruiterFlow imported successfully")
+except ImportError as e:
+    modules_status['recruiter_flow'] = False
+    print(f"❌ Failed to import recruiter_flow: {e}")
+
+# Check if all modules are available
+if all(modules_status.values()):
+    MODULES_AVAILABLE = True
+    print("✅ All modules imported successfully")
+else:
     MODULES_AVAILABLE = False
-    st.error(f"❌ Failed to import modules: {e}")
+    print(f"⚠️ Some modules missing: {[k for k, v in modules_status.items() if not v]}")
 
 # Page configuration
 st.set_page_config(
@@ -98,23 +138,43 @@ if 'db_manager' not in st.session_state:
 
 # Initialize all session state objects only if modules are available
 if MODULES_AVAILABLE:
-    if 'workflow_manager' not in st.session_state:
-        st.session_state.workflow_manager = WorkflowManager()
-
-    if 'student_flow' not in st.session_state:
-        st.session_state.student_flow = StudentFlow()
-
-    if 'college_flow' not in st.session_state:
-        st.session_state.college_flow = CollegeFlow()
-
-    if 'recruiter_flow' not in st.session_state:
-        st.session_state.recruiter_flow = RecruiterFlow()
+    try:
+        if 'workflow_manager' not in st.session_state:
+            st.session_state.workflow_manager = WorkflowManager()
+            print("✅ WorkflowManager initialized")
+        
+        if 'student_flow' not in st.session_state:
+            st.session_state.student_flow = StudentFlow()
+            print("✅ StudentFlow initialized")
+        
+        if 'college_flow' not in st.session_state:
+            # Create placeholder if module not available
+            if modules_status.get('college_flow', False):
+                st.session_state.college_flow = CollegeFlow()
+                print("✅ CollegeFlow initialized")
+            else:
+                st.session_state.college_flow = None
+                print("⚠️ CollegeFlow not available")
+        
+        if 'recruiter_flow' not in st.session_state:
+            # Create placeholder if module not available
+            if modules_status.get('recruiter_flow', False):
+                st.session_state.recruiter_flow = RecruiterFlow()
+                print("✅ RecruiterFlow initialized")
+            else:
+                st.session_state.recruiter_flow = None
+                print("⚠️ RecruiterFlow not available")
+                
+    except Exception as e:
+        st.error(f"Error initializing modules: {e}")
+        MODULES_AVAILABLE = False
 else:
     # Create placeholder objects if modules are not available
     st.session_state.workflow_manager = None
     st.session_state.student_flow = None
     st.session_state.college_flow = None
     st.session_state.recruiter_flow = None
+    print("⚠️ Using placeholder objects for missing modules")
 
 # Initialize session state variables
 if 'selected_role' not in st.session_state:
@@ -154,17 +214,25 @@ if not DB_AVAILABLE:
 # Check if modules are available
 if not MODULES_AVAILABLE:
     st.error("""
-    ❌ **Critical Error: Application modules not found**
+    ❌ **Critical Error: Some application modules not found**
     
-    Please make sure the following modules exist:
-    - `modules/workflow_manager.py`
-    - `modules/student_flow.py`
-    - `modules/college_flow.py`
-    - `modules/recruiter_flow.py`
-    
-    The app cannot continue without these modules.
+    Missing modules:
     """)
-    st.stop()
+    
+    for module, status in modules_status.items():
+        if not status:
+            st.write(f"- ❌ `modules/{module}.py`")
+    
+    st.info("""
+    **Temporary Solution:** Creating basic module files for you...
+    """)
+    
+    # Create minimal module files automatically
+    create_minimal_modules()
+    
+    # Try to import again
+    st.info("Trying to import modules again...")
+    st.rerun()
 
 # Sidebar
 with st.sidebar:
@@ -213,23 +281,41 @@ with st.sidebar:
     # Show workflow based on selected role
     if st.session_state.selected_role == "👨‍🎓 Student":
         if st.session_state.workflow_manager:
-            st.session_state.workflow_manager.display_student_workflow()
+            try:
+                st.session_state.workflow_manager.display_student_workflow()
+            except Exception as e:
+                st.error(f"Error displaying student workflow: {e}")
     elif st.session_state.selected_role == "🏫 College Admin":
         if st.session_state.workflow_manager:
-            st.session_state.workflow_manager.display_college_workflow()
+            try:
+                st.session_state.workflow_manager.display_college_workflow()
+            except Exception as e:
+                st.error(f"Error displaying college workflow: {e}")
     elif st.session_state.selected_role == "💼 Recruiter":
         if st.session_state.workflow_manager:
-            st.session_state.workflow_manager.display_recruiter_workflow()
+            try:
+                st.session_state.workflow_manager.display_recruiter_workflow()
+            except Exception as e:
+                st.error(f"Error displaying recruiter workflow: {e}")
     else:
         if st.session_state.workflow_manager:
-            st.session_state.workflow_manager.display_observer_dashboard()
+            try:
+                st.session_state.workflow_manager.display_observer_dashboard()
+            except Exception as e:
+                st.error(f"Error displaying observer dashboard: {e}")
 
 # Main content
 try:
     if st.session_state.selected_role == "👨‍🎓 Student":
         if not st.session_state.student_flow:
             st.error("Student flow module not initialized")
-            st.stop()
+            # Try to create a basic one
+            try:
+                st.session_state.student_flow = StudentFlow()
+            except:
+                st.info("Showing basic student interface...")
+                self.display_basic_student_interface()
+                st.stop()
         
         # Get current step from workflow
         current_step = st.session_state.workflows["student"]["current_step"]
@@ -256,8 +342,13 @@ try:
                     st.session_state.student_flow.demo_mode = True
         
         # Display student flow with current step
-        st.session_state.student_flow.current_step = current_step
-        st.session_state.student_flow.display()
+        try:
+            st.session_state.student_flow.current_step = current_step
+            st.session_state.student_flow.display()
+        except Exception as e:
+            st.error(f"Error displaying student flow: {e}")
+            st.info("Showing fallback interface...")
+            self.display_fallback_student_interface(current_step)
         
         # Add manual step navigation in main content too
         st.divider()
@@ -277,7 +368,8 @@ try:
         
     elif st.session_state.selected_role == "🏫 College Admin":
         if not st.session_state.college_flow:
-            st.error("College flow module not initialized")
+            st.error("College flow module not available")
+            self.display_basic_college_interface()
             st.stop()
         
         # Get current step from workflow
@@ -305,8 +397,12 @@ try:
                     st.session_state.college_flow.demo_mode = True
         
         # Display college flow with current step
-        st.session_state.college_flow.current_step = current_step
-        st.session_state.college_flow.display()
+        try:
+            st.session_state.college_flow.current_step = current_step
+            st.session_state.college_flow.display()
+        except Exception as e:
+            st.error(f"Error displaying college flow: {e}")
+            self.display_fallback_college_interface(current_step)
         
         # Add manual step navigation in main content too
         st.divider()
@@ -326,35 +422,23 @@ try:
         
     elif st.session_state.selected_role == "💼 Recruiter":
         if not st.session_state.recruiter_flow:
-            st.error("Recruiter flow module not initialized")
+            st.error("Recruiter flow module not available")
+            self.display_basic_recruiter_interface()
             st.stop()
         
         # Get current step from workflow
         current_step = st.session_state.workflows["recruiter"]["current_step"]
         
-        # Set database manager for recruiter flow
-        if not st.session_state.demo_mode and st.session_state.get('db_manager'):
-            if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
-                st.session_state.recruiter_flow.set_database_manager(
-                    st.session_state.db_manager,
-                    st.session_state.demo_mode
-                )
-            elif hasattr(st.session_state.recruiter_flow, 'db_manager'):
-                st.session_state.recruiter_flow.db_manager = st.session_state.db_manager
-                if hasattr(st.session_state.recruiter_flow, 'demo_mode'):
-                    st.session_state.recruiter_flow.demo_mode = st.session_state.demo_mode
-            else:
-                st.session_state.recruiter_flow.db_manager = st.session_state.db_manager
-        else:
-            if hasattr(st.session_state.recruiter_flow, 'set_database_manager'):
-                st.session_state.recruiter_flow.set_database_manager(None, True)
-            elif hasattr(st.session_state.recruiter_flow, 'db_manager'):
-                st.session_state.recruiter_flow.db_manager = None
-                if hasattr(st.session_state.recruiter_flow, 'demo_mode'):
-                    st.session_state.recruiter_flow.demo_mode = True
-        
         # Display recruiter flow with current step
-        st.session_state.recruiter_flow.display(current_step)
+        try:
+            if hasattr(st.session_state.recruiter_flow, 'display'):
+                st.session_state.recruiter_flow.display(current_step)
+            else:
+                st.error("Recruiter flow doesn't have display method")
+                self.display_fallback_recruiter_interface(current_step)
+        except Exception as e:
+            st.error(f"Error displaying recruiter flow: {e}")
+            self.display_fallback_recruiter_interface(current_step)
         
         # Add manual step navigation in main content too
         st.divider()
@@ -375,38 +459,14 @@ try:
     elif st.session_state.selected_role == "👀 Observer":
         # Display observer view from workflow manager
         if st.session_state.workflow_manager:
-            st.session_state.workflow_manager.display_observer_view()
+            try:
+                st.session_state.workflow_manager.display_observer_view()
+            except Exception as e:
+                st.error(f"Error displaying observer view: {e}")
+                self.display_fallback_observer_view()
         else:
             # Fallback if workflow manager is not available
-            st.header("📊 Observer Dashboard")
-            st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
-            
-            # Demo data
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Students", "1,250")
-            with col2:
-                st.metric("Active Jobs", "45")
-            with col3:
-                st.metric("Companies", "32")
-            
-            st.divider()
-            
-            # Recent activities (demo)
-            st.subheader("Recent Activities")
-            activities = pd.DataFrame({
-                "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
-                "Activity": [
-                    "TechCorp Solutions posted new job: Frontend Developer",
-                    "John Doe (Student) applied for Software Engineer position",
-                    "IIT Bombay uploaded 250 student records",
-                    "5 interviews scheduled for Amazon positions",
-                    "Microsoft extended offers to 3 candidates"
-                ],
-                "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
-            })
-            
-            st.dataframe(activities, use_container_width=True, hide_index=True)
+            self.display_fallback_observer_view()
 
 except Exception as e:
     st.error(f"❌ Application Error: {str(e)}")
@@ -445,6 +505,11 @@ with st.expander("🔧 Debug Information", expanded=False):
         st.write(f"- Has set_database_manager: {hasattr(st.session_state.student_flow, 'set_database_manager')}")
         st.write(f"- Has db_manager attribute: {hasattr(st.session_state.student_flow, 'db_manager')}")
         st.write(f"- Has demo_mode attribute: {hasattr(st.session_state.student_flow, 'demo_mode')}")
+    
+    # Module status
+    st.write("**Module Import Status:**")
+    for module, status in modules_status.items():
+        st.write(f"- {module}: {'✅' if status else '❌'}")
     
     # Quick database test
     if st.button("Run Quick Database Test"):
@@ -494,6 +559,218 @@ if not st.session_state.demo_mode and st.session_state.get('db_manager') and not
     
     The app will run in **Demo Mode** with sample data.
     """)
+
+# Fallback display methods
+def display_basic_student_interface(self):
+    st.header("👨‍🎓 Student Interface (Basic)")
+    st.info("The student flow module is not available. Showing basic interface.")
+    
+    current_step = st.session_state.workflows["student"]["current_step"]
+    
+    if current_step == 1:
+        st.subheader("Step 1: Profile Creation")
+        st.write("Please create your profile")
+        name = st.text_input("Name")
+        email = st.text_input("Email")
+        if st.button("Save Profile"):
+            st.success("Profile saved (demo)")
+    elif current_step == 2:
+        st.subheader("Step 2: Resume Building")
+        st.write("Build your resume here")
+    # Add more steps as needed
+
+def display_fallback_student_interface(self, current_step):
+    st.header(f"👨‍🎓 Student - Step {current_step}")
+    st.info("This is a fallback interface")
+    st.write(f"You are on step {current_step} of 8")
+
+def display_basic_college_interface(self):
+    st.header("🏫 College Admin Interface (Basic)")
+    st.info("The college flow module is not available.")
+    
+    st.write("College administration features:")
+    st.write("- Student management")
+    st.write("- Placement statistics")
+    st.write("- Company coordination")
+
+def display_fallback_college_interface(self, current_step):
+    st.header(f"🏫 College Admin - Step {current_step}")
+    st.info("Fallback interface for college admin")
+
+def display_basic_recruiter_interface(self):
+    st.header("💼 Recruiter Interface (Basic)")
+    st.info("The recruiter flow module is not available.")
+    
+    st.write("Recruiter features:")
+    st.write("- Post jobs")
+    st.write("- Review candidates")
+    st.write("- Schedule interviews")
+
+def display_fallback_recruiter_interface(self, current_step):
+    st.header(f"💼 Recruiter - Step {current_step}")
+    st.info("Fallback interface for recruiter")
+
+def display_fallback_observer_view(self):
+    st.header("📊 Observer Dashboard")
+    st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
+    
+    # Demo data
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Students", "1,250")
+    with col2:
+        st.metric("Active Jobs", "45")
+    with col3:
+        st.metric("Companies", "32")
+    
+    st.divider()
+    
+    # Recent activities (demo)
+    st.subheader("Recent Activities")
+    activities = pd.DataFrame({
+        "Time": ["10:30 AM", "09:45 AM", "Yesterday", "Yesterday", "2 days ago"],
+        "Activity": [
+            "TechCorp Solutions posted new job: Frontend Developer",
+            "John Doe (Student) applied for Software Engineer position",
+            "IIT Bombay uploaded 250 student records",
+            "5 interviews scheduled for Amazon positions",
+            "Microsoft extended offers to 3 candidates"
+        ],
+        "Type": ["Job Posting", "Application", "Data Upload", "Interview", "Offer"]
+    })
+    
+    st.dataframe(activities, use_container_width=True, hide_index=True)
+
+# Helper function to create minimal modules
+def create_minimal_modules():
+    """Create minimal module files if they don't exist"""
+    import os
+    
+    # Check if modules directory exists
+    modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+    if not os.path.exists(modules_dir):
+        os.makedirs(modules_dir)
+    
+    # Create __init__.py
+    init_file = os.path.join(modules_dir, '__init__.py')
+    if not os.path.exists(init_file):
+        with open(init_file, 'w') as f:
+            f.write('# Modules package\n')
+    
+    # Create missing module files
+    missing_modules = [k for k, v in modules_status.items() if not v]
+    
+    for module in missing_modules:
+        if module == 'student_flow':
+            create_minimal_student_flow()
+        elif module == 'college_flow':
+            create_minimal_college_flow()
+        elif module == 'recruiter_flow':
+            create_minimal_recruiter_flow()
+
+def create_minimal_student_flow():
+    """Create minimal student_flow.py"""
+    import os
+    modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+    file_path = os.path.join(modules_dir, 'student_flow.py')
+    
+    content = '''
+import streamlit as st
+
+class StudentFlow:
+    def __init__(self):
+        self.current_step = 1
+        self.db_manager = None
+        self.demo_mode = True
+    
+    def set_database_manager(self, db_manager, demo_mode=False):
+        self.db_manager = db_manager
+        self.demo_mode = demo_mode
+    
+    def display(self):
+        st.header("👨‍🎓 Student Placement Journey")
+        st.info(f"Current Step: {self.current_step}")
+        
+        if self.current_step == 1:
+            st.subheader("🎯 Profile Creation")
+            name = st.text_input("Full Name")
+            email = st.text_input("Email")
+            if st.button("Save Profile"):
+                st.success("Profile saved (demo)")
+        else:
+            st.write(f"Step {self.current_step} content would go here")
+'''
+    
+    with open(file_path, 'w') as f:
+        f.write(content)
+    print(f"✅ Created minimal student_flow.py")
+
+def create_minimal_college_flow():
+    """Create minimal college_flow.py"""
+    import os
+    modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+    file_path = os.path.join(modules_dir, 'college_flow.py')
+    
+    content = '''
+import streamlit as st
+
+class CollegeFlow:
+    def __init__(self):
+        self.current_step = 1
+        self.db_manager = None
+        self.demo_mode = True
+    
+    def set_database_manager(self, db_manager, demo_mode=False):
+        self.db_manager = db_manager
+        self.demo_mode = demo_mode
+    
+    def display(self):
+        st.header("🏫 College Admin Dashboard")
+        st.info(f"Current Step: {self.current_step}")
+        st.write("College administration features:")
+        st.write("- Student management")
+        st.write("- Placement statistics")
+        st.write("- Company coordination")
+'''
+    
+    with open(file_path, 'w') as f:
+        f.write(content)
+    print(f"✅ Created minimal college_flow.py")
+
+def create_minimal_recruiter_flow():
+    """Create minimal recruiter_flow.py"""
+    import os
+    modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
+    file_path = os.path.join(modules_dir, 'recruiter_flow.py')
+    
+    content = '''
+import streamlit as st
+
+class RecruiterFlow:
+    def __init__(self):
+        self.current_step = 1
+        self.db_manager = None
+        self.demo_mode = True
+    
+    def set_database_manager(self, db_manager, demo_mode=False):
+        self.db_manager = db_manager
+        self.demo_mode = demo_mode
+    
+    def display(self, current_step=None):
+        if current_step:
+            self.current_step = current_step
+        
+        st.header("💼 Recruiter Dashboard")
+        st.info(f"Current Step: {self.current_step}")
+        st.write("Recruiter features:")
+        st.write("- Post jobs")
+        st.write("- Review candidates")
+        st.write("- Schedule interviews")
+'''
+    
+    with open(file_path, 'w') as f:
+        f.write(content)
+    print(f"✅ Created minimal recruiter_flow.py")
 
 # Footer
 st.divider()
