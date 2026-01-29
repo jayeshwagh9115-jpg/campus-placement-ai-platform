@@ -780,5 +780,3 @@ st.markdown("""
     <p>Built with ❤️ using Streamlit & Python</p>
 </div>
 """, unsafe_allow_html=True)
-
-find the errors and give me correct and updated working code
