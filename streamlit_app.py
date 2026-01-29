@@ -638,6 +638,8 @@ def display_fallback_observer_view():
 
 # ========== SIDEBAR FALLBACK FUNCTIONS ==========
 
+# ========== SIDEBAR FALLBACK FUNCTIONS ==========
+
 def display_basic_student_sidebar():
     """Basic student sidebar when workflow_manager is not available"""
     st.subheader("Student Workflow")
@@ -703,6 +705,12 @@ def display_basic_observer_sidebar():
     st.write("• Student placements")
     st.write("• Company interactions")
     st.write("• Placement statistics")
+
+# ========== MODULE CREATION FUNCTIONS ==========
+
+def create_minimal_modules():
+    """Create minimal module files if they don't exist"""
+    # ... rest of the function ...
 
 # ========== MODULE CREATION FUNCTIONS ==========
 
