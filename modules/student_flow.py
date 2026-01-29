@@ -107,6 +107,10 @@ class StudentFlow:
                         self.student_data["profile"] = profile
                         self.student_id = profile.get('id')
                         
+                        # Ensure career_interests exists
+                        if 'career_interests' not in self.student_data["profile"]:
+                            self.student_data["profile"]["career_interests"] = []
+                        
                         # Load other data if student_id exists
                         if self.student_id:
                             # Load education
@@ -152,7 +156,7 @@ class StudentFlow:
             self.load_demo_data()
     
     def save_profile_to_database(self):
-        """Save student profile to database - FIXED VERSION"""
+        """Save student profile to database"""
         try:
             if self.demo_mode or not self.db_manager:
                 st.warning("⚠️ Running in demo mode - Profile saved locally only")
@@ -162,12 +166,8 @@ class StudentFlow:
                 st.error("❌ Not connected to database")
                 return {"success": False, "id": None, "error": "Database not connected"}
             
-            # Prepare profile data - ensure it matches database columns
+            # Prepare profile data
             profile_data = self.prepare_profile_data()
-            
-            # Debug: Show what we're trying to save
-            with st.expander("🔍 Debug: Profile Data Being Saved", expanded=False):
-                st.json(profile_data)
             
             # Validate required fields
             required_fields = ['full_name', 'email', 'roll_number']
@@ -175,26 +175,21 @@ class StudentFlow:
                 if not profile_data.get(field):
                     return {"success": False, "id": None, "error": f"Missing required field: {field}"}
             
-            # Try to save profile using the updated supabase_manager
+            # Try to save profile
             if hasattr(self.db_manager, 'save_student_profile'):
                 result = self.db_manager.save_student_profile(profile_data)
                 
-                # Check the result structure (should be dict with success, id, error)
                 if isinstance(result, dict):
                     if result.get('success'):
                         self.student_id = result.get('id')
-                        st.success(f"✅ Profile saved successfully! Student ID: {self.student_id}")
-                        
-                        # Store student info in session state
                         st.session_state['student_id'] = self.student_id
                         st.session_state['student_email'] = profile_data['email']
-                        
                         return result
                     else:
                         error_msg = result.get('error', 'Unknown error')
                         st.error(f"❌ Failed to save profile: {error_msg}")
                         return result
-                elif result:  # Backward compatibility - if it returns True
+                elif result:  # Backward compatibility
                     self.student_id = self.get_student_id_from_db()
                     return {"success": True, "id": self.student_id, "error": None}
                 else:
@@ -218,15 +213,12 @@ class StudentFlow:
         except Exception as e:
             error_msg = f"Error saving to database: {str(e)}"
             st.error(f"❌ {error_msg}")
-            with st.expander("Error Details"):
-                st.code(traceback.format_exc())
             return {"success": False, "id": None, "error": error_msg}
     
     def prepare_profile_data(self):
         """Prepare profile data to match database columns"""
         profile = self.student_data["profile"].copy()
         
-        # Map field names to match database columns
         mapped_data = {
             "full_name": profile.get("full_name", ""),
             "email": profile.get("email", ""),
@@ -234,7 +226,7 @@ class StudentFlow:
             "roll_number": profile.get("roll_number", ""),
             "department": profile.get("department", ""),
             "cgpa": float(profile.get("cgpa", 0.0)),
-            "skills": profile.get("skills", []),  # Use skills (matches DB column)
+            "skills": profile.get("skills", []),
             "backlogs": int(profile.get("backlogs", 0)),
             "linkedin_profile": profile.get("linkedin_profile", ""),
             "github_profile": profile.get("github_profile", ""),
@@ -242,7 +234,7 @@ class StudentFlow:
             "created_at": profile.get("created_at", datetime.now().isoformat())
         }
         
-        # Add year_of_study if we have year info
+        # Map year to year_of_study
         year = profile.get("year", "")
         if "First" in year:
             mapped_data["year_of_study"] = 1
@@ -255,7 +247,7 @@ class StudentFlow:
         elif "Post" in year:
             mapped_data["year_of_study"] = 5
         else:
-            mapped_data["year_of_study"] = 4  # Default to final year
+            mapped_data["year_of_study"] = 4
         
         # Clean up empty strings
         for key, value in mapped_data.items():
@@ -326,9 +318,8 @@ class StudentFlow:
                 # Add student_id to application
                 application_data['student_id'] = self.student_id
                 
-                # Get job_id if available (you might need to add this)
+                # Get job_id if available
                 if 'job_id' not in application_data:
-                    # You can implement job lookup here if needed
                     application_data['job_id'] = None
                 
                 result = self.db_manager.create_application(application_data)
@@ -373,7 +364,7 @@ class StudentFlow:
             st.error("Invalid step number")
     
     def step1_profile_creation(self):
-        """Step 1: Profile Creation - UPDATED for better database mapping"""
+        """Step 1: Profile Creation"""
         st.subheader("🎯 Profile Creation")
         st.info("Create your student profile to get started with placement preparation")
         
@@ -382,83 +373,74 @@ class StudentFlow:
             
             with col1:
                 full_name = st.text_input("Full Name*", 
-                                         value=self.student_data["profile"]["full_name"],
+                                         value=self.student_data["profile"].get("full_name", ""),
                                          placeholder="Enter your full name")
                 email = st.text_input("Email*", 
-                                     value=self.student_data["profile"]["email"],
+                                     value=self.student_data["profile"].get("email", ""),
                                      placeholder="student@college.edu")
                 phone = st.text_input("Phone Number", 
-                                     value=self.student_data["profile"]["phone"],
+                                     value=self.student_data["profile"].get("phone", ""),
                                      placeholder="+91 9876543210")
                 roll_number = st.text_input("Roll Number*", 
-                                           value=self.student_data["profile"]["roll_number"],
+                                           value=self.student_data["profile"].get("roll_number", ""),
                                            placeholder="e.g., 20BCS001")
             
             with col2:
-                department = st.selectbox("Department*",
-                    ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                     "Civil Engineering", "Information Technology", "Electronics", "Others"],
-                    index=0 if not self.student_data["profile"]["department"] else
-                    ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                     "Civil Engineering", "Information Technology", "Electronics", "Others"].index(
-                         self.student_data["profile"]["department"]
-                     ) if self.student_data["profile"]["department"] in 
-                     ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                      "Civil Engineering", "Information Technology", "Electronics", "Others"] else 0)
+                # Safely get department index
+                department_options = ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
+                                    "Civil Engineering", "Information Technology", "Electronics", "Others"]
+                current_dept = self.student_data["profile"].get("department", "")
+                dept_index = department_options.index(current_dept) if current_dept in department_options else 0
                 
-                year = st.selectbox("Year of Study*",
-                    ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"],
-                    index=3 if not self.student_data["profile"]["year"] else
-                    ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"].index(
-                        self.student_data["profile"]["year"]
-                    ) if self.student_data["profile"]["year"] in 
-                    ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"] else 3)
+                department = st.selectbox("Department*", department_options, index=dept_index)
+                
+                # Safely get year index
+                year_options = ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"]
+                current_year = self.student_data["profile"].get("year", "")
+                year_index = year_options.index(current_year) if current_year in year_options else 3
+                
+                year = st.selectbox("Year of Study*", year_options, index=year_index)
             
             col3, col4 = st.columns(2)
             with col3:
                 cgpa = st.number_input("CGPA*", 0.0, 10.0, 
-                                      float(self.student_data["profile"]["cgpa"]), 0.1)
+                                      float(self.student_data["profile"].get("cgpa", 0.0)), 0.1)
             with col4:
                 backlogs = st.number_input("Active Backlogs", 0, 20, 
-                                          self.student_data["profile"]["backlogs"])
+                                          self.student_data["profile"].get("backlogs", 0))
             
-            # Skills assessment - renamed to match database column
+            # Skills assessment
             st.subheader("Skills Assessment")
             skills_options = ["Python", "Java", "C++", "JavaScript", "React", "Node.js", "SQL",
                              "Machine Learning", "Data Analysis", "AWS", "Docker", "Git",
                              "Flutter", "Android", "iOS", "PHP", "Angular", "Vue.js", "TypeScript",
                              "MongoDB", "PostgreSQL", "Redis", "Kubernetes", "Terraform"]
             
-            # Use skills instead of technical_skills to match DB column
-            valid_default_skills = [skill for skill in self.student_data["profile"]["skills"] 
-                                  if skill in skills_options]
+            current_skills = self.student_data["profile"].get("skills", [])
+            valid_default_skills = [skill for skill in current_skills if skill in skills_options]
             
-            skills = st.multiselect("Technical Skills*",
-                skills_options,
-                default=valid_default_skills)
+            skills = st.multiselect("Technical Skills*", skills_options, default=valid_default_skills)
             
-            # Career interests (separate from skills)
+            # Career interests
             st.subheader("Career Interests")
             career_interests_options = ["Software Development", "Data Science", "Product Management",
                                        "Research", "Consulting", "Entrepreneurship", "Higher Studies",
                                        "Web Development", "Mobile Development", "DevOps", "Cloud Computing",
                                        "UI/UX Design", "Cybersecurity", "AI/ML Engineering"]
             
-            valid_default_interests = [interest for interest in self.student_data["profile"]["career_interests"] 
-                                     if interest in career_interests_options]
+            current_interests = self.student_data["profile"].get("career_interests", [])
+            valid_default_interests = [interest for interest in current_interests if interest in career_interests_options]
             
-            career_interests = st.multiselect("Areas of Interest",
-                career_interests_options,
-                default=valid_default_interests)
+            career_interests = st.multiselect("Areas of Interest", career_interests_options, default=valid_default_interests)
             
             # Social Links
             st.subheader("🔗 Social Links")
             linkedin = st.text_input("LinkedIn Profile", 
-                                    value=self.student_data["profile"]["linkedin_profile"])
+                                    value=self.student_data["profile"].get("linkedin_profile", ""))
             github = st.text_input("GitHub Profile", 
-                                  value=self.student_data["profile"]["github_profile"])
+                                  value=self.student_data["profile"].get("github_profile", ""))
             portfolio = st.text_input("Portfolio Website", 
-                                     value=self.student_data["profile"]["portfolio_link"])
+                                     value=self.student_data["profile"].get("portfolio_link", ""))
             
             # Submit button
             submitted = st.form_submit_button("💾 Save Profile & Continue")
@@ -468,7 +450,7 @@ class StudentFlow:
                 if not all([full_name, email, roll_number, department, year]):
                     st.error("Please fill in all required fields (*)")
                 else:
-                    # Update student data with correct field names
+                    # Update student data
                     self.student_data["profile"].update({
                         "full_name": full_name,
                         "email": email,
@@ -478,8 +460,8 @@ class StudentFlow:
                         "year": year,
                         "cgpa": cgpa,
                         "backlogs": backlogs,
-                        "skills": skills,  # Use skills to match DB column
-                        "career_interests": career_interests,  # Keep separate from skills
+                        "skills": skills,
+                        "career_interests": career_interests,
                         "linkedin_profile": linkedin,
                         "github_profile": github,
                         "portfolio_link": portfolio,
@@ -585,7 +567,6 @@ class StudentFlow:
                 self.current_step = 3
                 st.rerun()
     
-    
     def step3_nep_course_planning(self):
         """Step 3: NEP Course Planning"""
         st.subheader("📚 NEP Course Planning")
@@ -642,6 +623,17 @@ class StudentFlow:
                 "total_credits": total_credits
             }
             st.success("Course plan saved!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step3_prev"):
+                self.current_step = 2
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step3_next"):
+                self.current_step = 4
+                st.rerun()
     
     def step4_internship_match(self):
         """Step 4: PM Internship Match"""
@@ -665,14 +657,14 @@ class StudentFlow:
                 "role": "Software Engineering Intern", 
                 "location": "Hyderabad", 
                 "requirements": ["Python", "C++", "Data Structures"],
-                "match": "92%" if any(skill in profile.get("technical_skills", []) for skill in ["Python", "C++"]) else "78%"
+                "match": "92%" if any(skill in profile.get("skills", []) for skill in ["Python", "C++"]) else "78%"
             },
             {
                 "company": "Amazon", 
                 "role": "Data Science Intern", 
                 "location": "Mumbai", 
                 "requirements": ["Machine Learning", "Python", "Statistics"],
-                "match": "88%" if "Machine Learning" in profile.get("technical_skills", []) else "72%"
+                "match": "88%" if "Machine Learning" in profile.get("skills", []) else "72%"
             },
             {
                 "company": "Adobe", 
@@ -717,6 +709,17 @@ class StudentFlow:
                     self.student_data["job_applications"].append(application)
                     st.success(f"Application started for {intern['role']} at {intern['company']}!")
                     st.rerun()
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step4_prev"):
+                self.current_step = 3
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step4_next"):
+                self.current_step = 5
+                st.rerun()
     
     def step5_career_path_planning(self):
         """Step 5: Career Path Planning"""
@@ -736,7 +739,7 @@ class StudentFlow:
                 "path": "Junior Developer → Senior Developer → Tech Lead → Engineering Manager",
                 "skills_needed": ["Programming", "System Design", "Algorithms", "Agile Methodology"],
                 "avg_package": "8-15 LPA (Entry) → 30-50+ LPA (Senior)",
-                "match": "90%" if any(skill in profile.get("technical_skills", []) for skill in ["Python", "Java", "C++"]) else "70%"
+                "match": "90%" if any(skill in profile.get("skills", []) for skill in ["Python", "Java", "C++"]) else "70%"
             })
         
         if "Data Science" in profile.get("career_interests", []):
@@ -745,7 +748,7 @@ class StudentFlow:
                 "path": "Data Analyst → Junior Data Scientist → Senior Data Scientist → Head of Analytics",
                 "skills_needed": ["Statistics", "Machine Learning", "Python/R", "SQL", "Data Visualization"],
                 "avg_package": "6-12 LPA (Entry) → 25-40+ LPA (Senior)",
-                "match": "85%" if any(skill in profile.get("technical_skills", []) for skill in ["Machine Learning", "Data Analysis", "Python"]) else "65%"
+                "match": "85%" if any(skill in profile.get("skills", []) for skill in ["Machine Learning", "Data Analysis", "Python"]) else "65%"
             })
         
         if "Product Management" in profile.get("career_interests", []):
@@ -765,7 +768,7 @@ class StudentFlow:
                 st.write(f"**Average Package:** {rec['avg_package']}")
                 
                 # Check skill gaps
-                student_skills = set(profile.get("technical_skills", []))
+                student_skills = set(profile.get("skills", []))
                 needed_skills = set(rec['skills_needed'])
                 missing_skills = needed_skills - student_skills
                 
@@ -799,6 +802,17 @@ class StudentFlow:
                 "set_date": datetime.now().strftime("%Y-%m-%d")
             }
             st.success("Career goals saved!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step5_prev"):
+                self.current_step = 4
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step5_next"):
+                self.current_step = 6
+                st.rerun()
     
     def step6_placement_prediction(self):
         """Step 6: Placement Prediction"""
@@ -823,7 +837,7 @@ class StudentFlow:
         
         with col2:
             skills_count = st.slider("Number of Skills", 0, 20, 
-                                    len(profile.get("technical_skills", [])), 
+                                    len(profile.get("skills", [])), 
                                     step=1, key="skills_slider")
             coding_rating = st.slider("Coding Proficiency (1-10)", 1, 10, 7, step=1, key="coding_slider")
             communication_rating = st.slider("Communication Skills (1-10)", 1, 10, 7, step=1, key="comm_slider")
@@ -925,6 +939,17 @@ class StudentFlow:
                     st.write(f"• {rec}")
             else:
                 st.success("✅ You're on track for excellent placement!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step6_prev"):
+                self.current_step = 5
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step6_next"):
+                self.current_step = 7
+                st.rerun()
     
     def step7_interview_preparation(self):
         """Step 7: Interview Preparation"""
@@ -1067,6 +1092,17 @@ class StudentFlow:
                 url = description.split(" - ")[0]
                 desc = description.split(" - ")[1]
                 st.write(f"🔗 **[{platform}]({url})**: {desc}")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step7_prev"):
+                self.current_step = 6
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step7_next"):
+                self.current_step = 8
+                st.rerun()
     
     def step8_placement_tracking(self):
         """Step 8: Placement Tracking"""
@@ -1205,7 +1241,7 @@ class StudentFlow:
         # Restart option
         st.divider()
         if st.button("🔄 Start New Journey", key="restart_journey"):
-            # Reset student data
+            # Reset student data but keep profile
             self.student_data = {
                 "profile": self.student_data["profile"],
                 "education": [],
@@ -1222,6 +1258,18 @@ class StudentFlow:
             }
             st.success("Journey reset! You can start again.")
             st.rerun()
+        
+        # Finish journey button
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step8_prev"):
+                self.current_step = 7
+                st.rerun()
+        with col3:
+            if st.button("Finish Journey ✅", key="step8_finish"):
+                st.balloons()
+                st.success("🎉 Congratulations on completing your placement journey!")
     
     def preview_resume(self):
         """Preview the resume"""
@@ -1255,7 +1303,7 @@ class StudentFlow:
         # Get skills
         skills = resume.get("skills", [])
         if not skills:
-            skills = profile.get("technical_skills", ["Skills"])
+            skills = profile.get("skills", ["Skills"])
         
         # Get project data
         projects = resume.get("projects", [{}])
@@ -1364,18 +1412,16 @@ class StudentFlow:
             
             col1, col2 = st.columns(2)
             with col1:
-                st.write(f"**Name:** {profile['full_name']}")
-                st.write(f"**Email:** {profile['email']}")
-                st.write(f"**College ID:** {profile['college_id']}")
-                st.write(f"**Roll No:** {profile['roll_number']}")
-                st.write(f"**Department:** {profile['department']}")
+                st.write(f"**Name:** {profile.get('full_name', '')}")
+                st.write(f"**Email:** {profile.get('email', '')}")
+                st.write(f"**Roll No:** {profile.get('roll_number', '')}")
+                st.write(f"**Department:** {profile.get('department', '')}")
             
             with col2:
-                st.write(f"**Year:** {profile['year']}")
-                st.write(f"**Semester:** {profile['semester']}")
-                st.write(f"**CGPA:** {profile['cgpa']}")
-                st.write(f"**Backlogs:** {profile['backlogs']}")
-                st.write(f"**Career Interests:** {', '.join(profile['career_interests'])}")
+                st.write(f"**Year:** {profile.get('year', '')}")
+                st.write(f"**CGPA:** {profile.get('cgpa', '')}")
+                st.write(f"**Backlogs:** {profile.get('backlogs', '')}")
+                st.write(f"**Career Interests:** {', '.join(profile.get('career_interests', []))}")
             
-            if profile['technical_skills']:
-                st.write(f"**Technical Skills:** {', '.join(profile['technical_skills'])}")
+            if profile.get('skills'):
+                st.write(f"**Technical Skills:** {', '.join(profile['skills'])}")
