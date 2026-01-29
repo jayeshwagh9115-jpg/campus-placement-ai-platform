@@ -635,26 +635,23 @@ def display_fallback_observer_view():
     
     st.dataframe(activities, use_container_width=True, hide_index=True)
 
-
-# ========== SIDEBAR FALLBACK FUNCTIONS ==========
-
-# ========== SIDEBAR FALLBACK FUNCTIONS ==========
+# ========== SIDEBAR FALLBACKS ==========
 
 def display_basic_student_sidebar():
-    """Basic student sidebar when workflow_manager is not available"""
+    """Basic student sidebar"""
     st.subheader("Student Workflow")
     current_step = st.session_state.workflows["student"]["current_step"]
     st.write(f"**Current Step:** {current_step}/8")
     
     steps = [
-        "🎯 Profile Creation",
-        "📝 Resume Building", 
-        "📚 Skill Assessment",
-        "🔍 Job Search",
-        "📝 Application",
-        "🎤 Interview Prep",
-        "💼 Interview",
-        "✅ Offer"
+        "Profile Creation",
+        "Resume Building",
+        "Skill Assessment",
+        "Job Search",
+        "Application",
+        "Interview Prep",
+        "Interview",
+        "Offer"
     ]
     
     for i, step in enumerate(steps, 1):
@@ -662,55 +659,19 @@ def display_basic_student_sidebar():
         st.write(f"{status} Step {i}: {step}")
 
 def display_basic_college_sidebar():
-    """Basic college sidebar when workflow_manager is not available"""
+    """Basic college sidebar"""
     st.subheader("College Admin Workflow")
-    current_step = st.session_state.workflows["college"]["current_step"]
-    st.write(f"**Current Step:** {current_step}/6")
-    
-    steps = [
-        "📊 Dashboard",
-        "👨‍🎓 Student Management",
-        "🤝 Company Coordination",
-        "📋 Job Postings",
-        "📈 Placement Stats",
-        "📄 Reports"
-    ]
-    
-    for i, step in enumerate(steps, 1):
-        status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-        st.write(f"{status} Step {i}: {step}")
+    st.write("Manage college placement activities")
 
 def display_basic_recruiter_sidebar():
-    """Basic recruiter sidebar when workflow_manager is not available"""
+    """Basic recruiter sidebar"""
     st.subheader("Recruiter Workflow")
-    current_step = st.session_state.workflows["recruiter"]["current_step"]
-    st.write(f"**Current Step:** {current_step}/5")
-    
-    steps = [
-        "🏢 Company Profile",
-        "📝 Post Jobs",
-        "📋 Review Applications",
-        "📅 Schedule Interviews",
-        "🎉 Make Offers"
-    ]
-    
-    for i, step in enumerate(steps, 1):
-        status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-        st.write(f"{status} Step {i}: {step}")
+    st.write("Manage recruitment activities")
 
 def display_basic_observer_sidebar():
-    """Basic observer sidebar when workflow_manager is not available"""
-    st.subheader("Observer Dashboard")
-    st.write("📊 Monitor all platform activities")
-    st.write("• Student placements")
-    st.write("• Company interactions")
-    st.write("• Placement statistics")
-
-# ========== MODULE CREATION FUNCTIONS ==========
-
-def create_minimal_modules():
-    """Create minimal module files if they don't exist"""
-    # ... rest of the function ...
+    """Basic observer sidebar"""
+    st.subheader("Observer View")
+    st.write("Monitor platform activities")
 
 # ========== MODULE CREATION FUNCTIONS ==========
 
