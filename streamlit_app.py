@@ -245,13 +245,12 @@ with st.sidebar:
         
         # Quick stats with error handling
         try:
-            if hasattr(st.session_state.db_manager, 'get_dashboard_stats'):
-                stats = st.session_state.db_manager.get_dashboard_stats()
-                with st.expander("📊 Quick Stats"):
-                    st.write(f"👨‍🎓 Students: {stats.get('total_students', 0)}")
-                    st.write(f"💼 Companies: {stats.get('total_companies', 0)}")
-                    st.write(f"📋 Active Jobs: {stats.get('active_jobs', 0)}")
-                    st.write(f"📄 Applications: {stats.get('total_applications', 0)}")
+            stats = st.session_state.db_manager.get_dashboard_stats()
+            with st.expander("📊 Quick Stats"):
+                st.write(f"👨‍🎓 Students: {stats.get('total_students', 0)}")
+                st.write(f"💼 Companies: {stats.get('total_companies', 0)}")
+                st.write(f"📋 Active Jobs: {stats.get('active_jobs', 0)}")
+                st.write(f"📄 Applications: {stats.get('total_applications', 0)}")
         except Exception as e:
             st.warning(f"⚠️ Could not load stats: {str(e)[:50]}")
     else:
@@ -286,32 +285,24 @@ with st.sidebar:
                 st.session_state.workflow_manager.display_student_workflow()
             except Exception as e:
                 st.error(f"Error displaying student workflow: {e}")
-        else:
-            display_basic_student_sidebar()
     elif st.session_state.selected_role == "🏫 College Admin":
         if st.session_state.workflow_manager:
             try:
                 st.session_state.workflow_manager.display_college_workflow()
             except Exception as e:
                 st.error(f"Error displaying college workflow: {e}")
-        else:
-            display_basic_college_sidebar()
     elif st.session_state.selected_role == "💼 Recruiter":
         if st.session_state.workflow_manager:
             try:
                 st.session_state.workflow_manager.display_recruiter_workflow()
             except Exception as e:
                 st.error(f"Error displaying recruiter workflow: {e}")
-        else:
-            display_basic_recruiter_sidebar()
     else:
         if st.session_state.workflow_manager:
             try:
                 st.session_state.workflow_manager.display_observer_dashboard()
             except Exception as e:
                 st.error(f"Error displaying observer dashboard: {e}")
-        else:
-            display_basic_observer_sidebar()
 
 # Main content
 try:
@@ -323,7 +314,7 @@ try:
                 st.session_state.student_flow = StudentFlow()
             except:
                 st.info("Showing basic student interface...")
-                display_basic_student_interface()
+                self.display_basic_student_interface()
                 st.stop()
         
         # Get current step from workflow
@@ -350,23 +341,35 @@ try:
                 if hasattr(st.session_state.student_flow, 'demo_mode'):
                     st.session_state.student_flow.demo_mode = True
         
-        # Sync current step with StudentFlow object
-        st.session_state.student_flow.current_step = current_step
-        
-        # Display student flow
+        # Display student flow with current step
         try:
+            st.session_state.student_flow.current_step = current_step
             st.session_state.student_flow.display()
         except Exception as e:
             st.error(f"Error displaying student flow: {e}")
             st.info("Showing fallback interface...")
-            display_fallback_student_interface(current_step)
+            self.display_fallback_student_interface(current_step)
         
-        # REMOVED: Navigation buttons from main content (they are in workflow_manager)
+        # Add manual step navigation in main content too
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="main_student_prev", disabled=(current_step <= 1)):
+                if current_step > 1:
+                    st.session_state.workflows["student"]["current_step"] -= 1
+                    st.rerun()
+        with col2:
+            st.write(f"**Step {current_step} of 8**")
+        with col3:
+            if st.button("Next Step ▶", key="main_student_next", disabled=(current_step >= 8)):
+                if current_step < 8:
+                    st.session_state.workflows["student"]["current_step"] += 1
+                    st.rerun()
         
     elif st.session_state.selected_role == "🏫 College Admin":
         if not st.session_state.college_flow:
             st.error("College flow module not available")
-            display_basic_college_interface()
+            self.display_basic_college_interface()
             st.stop()
         
         # Get current step from workflow
@@ -393,59 +396,77 @@ try:
                 if hasattr(st.session_state.college_flow, 'demo_mode'):
                     st.session_state.college_flow.demo_mode = True
         
-        # Sync current step with CollegeFlow object
-        st.session_state.college_flow.current_step = current_step
-        
         # Display college flow with current step
         try:
-            if hasattr(st.session_state.college_flow, 'display'):
-                st.session_state.college_flow.display()
-            else:
-                display_fallback_college_interface(current_step)
+            st.session_state.college_flow.current_step = current_step
+            st.session_state.college_flow.display()
         except Exception as e:
             st.error(f"Error displaying college flow: {e}")
-            display_fallback_college_interface(current_step)
+            self.display_fallback_college_interface(current_step)
         
-        # REMOVED: Navigation buttons from main content (they are in workflow_manager)
+        # Add manual step navigation in main content too
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="main_college_prev", disabled=(current_step <= 1)):
+                if current_step > 1:
+                    st.session_state.workflows["college"]["current_step"] -= 1
+                    st.rerun()
+        with col2:
+            st.write(f"**Step {current_step} of 8**")
+        with col3:
+            if st.button("Next Step ▶", key="main_college_next", disabled=(current_step >= 8)):
+                if current_step < 8:
+                    st.session_state.workflows["college"]["current_step"] += 1
+                    st.rerun()
         
     elif st.session_state.selected_role == "💼 Recruiter":
         if not st.session_state.recruiter_flow:
             st.error("Recruiter flow module not available")
-            display_basic_recruiter_interface()
+            self.display_basic_recruiter_interface()
             st.stop()
         
         # Get current step from workflow
         current_step = st.session_state.workflows["recruiter"]["current_step"]
         
-        # Sync current step with RecruiterFlow object
-        st.session_state.recruiter_flow.current_step = current_step
-        
         # Display recruiter flow with current step
         try:
             if hasattr(st.session_state.recruiter_flow, 'display'):
-                st.session_state.recruiter_flow.display()
+                st.session_state.recruiter_flow.display(current_step)
             else:
-                display_fallback_recruiter_interface(current_step)
+                st.error("Recruiter flow doesn't have display method")
+                self.display_fallback_recruiter_interface(current_step)
         except Exception as e:
             st.error(f"Error displaying recruiter flow: {e}")
-            display_fallback_recruiter_interface(current_step)
+            self.display_fallback_recruiter_interface(current_step)
         
-        # REMOVED: Navigation buttons from main content (they are in workflow_manager)
+        # Add manual step navigation in main content too
+        st.divider()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="main_recruiter_prev", disabled=(current_step <= 1)):
+                if current_step > 1:
+                    st.session_state.workflows["recruiter"]["current_step"] -= 1
+                    st.rerun()
+        with col2:
+            st.write(f"**Step {current_step} of 8**")
+        with col3:
+            if st.button("Next Step ▶", key="main_recruiter_next", disabled=(current_step >= 8)):
+                if current_step < 8:
+                    st.session_state.workflows["recruiter"]["current_step"] += 1
+                    st.rerun()
         
     elif st.session_state.selected_role == "👀 Observer":
         # Display observer view from workflow manager
         if st.session_state.workflow_manager:
             try:
-                if hasattr(st.session_state.workflow_manager, 'display_observer_view'):
-                    st.session_state.workflow_manager.display_observer_view()
-                else:
-                    display_fallback_observer_view()
+                st.session_state.workflow_manager.display_observer_view()
             except Exception as e:
                 st.error(f"Error displaying observer view: {e}")
-                display_fallback_observer_view()
+                self.display_fallback_observer_view()
         else:
             # Fallback if workflow manager is not available
-            display_fallback_observer_view()
+            self.display_fallback_observer_view()
 
 except Exception as e:
     st.error(f"❌ Application Error: {str(e)}")
@@ -539,10 +560,8 @@ if not st.session_state.demo_mode and st.session_state.get('db_manager') and not
     The app will run in **Demo Mode** with sample data.
     """)
 
-# ========== FALLBACK DISPLAY METHODS ==========
-
-def display_basic_student_interface():
-    """Basic student interface fallback"""
+# Fallback display methods
+def display_basic_student_interface(self):
     st.header("👨‍🎓 Student Interface (Basic)")
     st.info("The student flow module is not available. Showing basic interface.")
     
@@ -558,23 +577,14 @@ def display_basic_student_interface():
     elif current_step == 2:
         st.subheader("Step 2: Resume Building")
         st.write("Build your resume here")
-        st.text_area("Resume Content", height=200)
-        if st.button("Save Resume"):
-            st.success("Resume saved (demo)")
-    elif current_step == 3:
-        st.subheader("Step 3: Skill Assessment")
-        st.write("Take skill assessment tests")
-    else:
-        st.write(f"Step {current_step} content would go here")
+    # Add more steps as needed
 
-def display_fallback_student_interface(current_step):
-    """Fallback interface for student"""
+def display_fallback_student_interface(self, current_step):
     st.header(f"👨‍🎓 Student - Step {current_step}")
     st.info("This is a fallback interface")
     st.write(f"You are on step {current_step} of 8")
 
-def display_basic_college_interface():
-    """Basic college interface fallback"""
+def display_basic_college_interface(self):
     st.header("🏫 College Admin Interface (Basic)")
     st.info("The college flow module is not available.")
     
@@ -583,13 +593,11 @@ def display_basic_college_interface():
     st.write("- Placement statistics")
     st.write("- Company coordination")
 
-def display_fallback_college_interface(current_step):
-    """Fallback interface for college admin"""
+def display_fallback_college_interface(self, current_step):
     st.header(f"🏫 College Admin - Step {current_step}")
     st.info("Fallback interface for college admin")
 
-def display_basic_recruiter_interface():
-    """Basic recruiter interface fallback"""
+def display_basic_recruiter_interface(self):
     st.header("💼 Recruiter Interface (Basic)")
     st.info("The recruiter flow module is not available.")
     
@@ -598,13 +606,11 @@ def display_basic_recruiter_interface():
     st.write("- Review candidates")
     st.write("- Schedule interviews")
 
-def display_fallback_recruiter_interface(current_step):
-    """Fallback interface for recruiter"""
+def display_fallback_recruiter_interface(self, current_step):
     st.header(f"💼 Recruiter - Step {current_step}")
     st.info("Fallback interface for recruiter")
 
-def display_fallback_observer_view():
-    """Fallback observer dashboard"""
+def display_fallback_observer_view(self):
     st.header("📊 Observer Dashboard")
     st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
     
@@ -635,46 +641,7 @@ def display_fallback_observer_view():
     
     st.dataframe(activities, use_container_width=True, hide_index=True)
 
-# ========== SIDEBAR FALLBACKS ==========
-
-def display_basic_student_sidebar():
-    """Basic student sidebar"""
-    st.subheader("Student Workflow")
-    current_step = st.session_state.workflows["student"]["current_step"]
-    st.write(f"**Current Step:** {current_step}/8")
-    
-    steps = [
-        "Profile Creation",
-        "Resume Building",
-        "Skill Assessment",
-        "Job Search",
-        "Application",
-        "Interview Prep",
-        "Interview",
-        "Offer"
-    ]
-    
-    for i, step in enumerate(steps, 1):
-        status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-        st.write(f"{status} Step {i}: {step}")
-
-def display_basic_college_sidebar():
-    """Basic college sidebar"""
-    st.subheader("College Admin Workflow")
-    st.write("Manage college placement activities")
-
-def display_basic_recruiter_sidebar():
-    """Basic recruiter sidebar"""
-    st.subheader("Recruiter Workflow")
-    st.write("Manage recruitment activities")
-
-def display_basic_observer_sidebar():
-    """Basic observer sidebar"""
-    st.subheader("Observer View")
-    st.write("Monitor platform activities")
-
-# ========== MODULE CREATION FUNCTIONS ==========
-
+# Helper function to create minimal modules
 def create_minimal_modules():
     """Create minimal module files if they don't exist"""
     import os
@@ -694,105 +661,15 @@ def create_minimal_modules():
     missing_modules = [k for k, v in modules_status.items() if not v]
     
     for module in missing_modules:
-        if module == 'workflow_manager':
-            create_minimal_workflow_manager_NO_BUTTONS()  # Use NO BUTTONS version
-        elif module == 'student_flow':
-            create_minimal_student_flow_NO_BUTTONS()  # Use NO BUTTONS version
+        if module == 'student_flow':
+            create_minimal_student_flow()
         elif module == 'college_flow':
             create_minimal_college_flow()
         elif module == 'recruiter_flow':
             create_minimal_recruiter_flow()
 
-def create_minimal_workflow_manager_NO_BUTTONS():
-    """Create minimal workflow_manager.py WITHOUT navigation buttons"""
-    import os
-    modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
-    file_path = os.path.join(modules_dir, 'workflow_manager.py')
-    
-    content = '''
-import streamlit as st
-
-class WorkflowManager:
-    def __init__(self):
-        pass
-    
-    def display_student_workflow(self):
-        """Display student workflow in sidebar - NO NAVIGATION BUTTONS"""
-        st.subheader("Student Workflow")
-        current_step = st.session_state.workflows["student"]["current_step"]
-        st.write(f"**Current Step:** {current_step}/8")
-        
-        steps = [
-            "Profile Creation",
-            "Resume Building",
-            "Skill Assessment",
-            "Job Search",
-            "Application",
-            "Interview Prep",
-            "Interview",
-            "Offer"
-        ]
-        
-        for i, step in enumerate(steps, 1):
-            status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-            st.write(f"{status} Step {i}: {step}")
-        
-        # NO NAVIGATION BUTTONS HERE
-    
-    def display_college_workflow(self):
-        """Display college workflow in sidebar - NO NAVIGATION BUTTONS"""
-        st.subheader("College Admin Workflow")
-        current_step = st.session_state.workflows["college"]["current_step"]
-        st.write(f"**Current Step:** {current_step}/6")
-        
-        steps = [
-            "Dashboard",
-            "Student Management",
-            "Company Coordination",
-            "Job Postings",
-            "Placement Stats",
-            "Reports"
-        ]
-        
-        for i, step in enumerate(steps, 1):
-            status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-            st.write(f"{status} Step {i}: {step}")
-    
-    def display_recruiter_workflow(self):
-        """Display recruiter workflow in sidebar - NO NAVIGATION BUTTONS"""
-        st.subheader("Recruiter Workflow")
-        current_step = st.session_state.workflows["recruiter"]["current_step"]
-        st.write(f"**Current Step:** {current_step}/5")
-        
-        steps = [
-            "Company Profile",
-            "Post Jobs",
-            "Review Applications",
-            "Schedule Interviews",
-            "Make Offers"
-        ]
-        
-        for i, step in enumerate(steps, 1):
-            status = "✅" if i < current_step else "▶️" if i == current_step else "⏳"
-            st.write(f"{status} Step {i}: {step}")
-    
-    def display_observer_dashboard(self):
-        """Display observer dashboard in sidebar"""
-        st.subheader("Observer Dashboard")
-        st.write("Monitor all platform activities")
-    
-    def display_observer_view(self):
-        """Display observer view in main content"""
-        st.header("📊 Platform Overview")
-        st.write("Observer view content would go here")
-'''
-    
-    with open(file_path, 'w') as f:
-        f.write(content)
-    print(f"✅ Created minimal workflow_manager.py (NO BUTTONS)")
-
-def create_minimal_student_flow_NO_BUTTONS():
-    """Create minimal student_flow.py WITH navigation buttons in display()"""
+def create_minimal_student_flow():
+    """Create minimal student_flow.py"""
     import os
     modules_dir = os.path.join(os.path.dirname(__file__), 'modules')
     file_path = os.path.join(modules_dir, 'student_flow.py')
@@ -818,64 +695,15 @@ class StudentFlow:
             st.subheader("🎯 Profile Creation")
             name = st.text_input("Full Name")
             email = st.text_input("Email")
-            department = st.selectbox("Department", ["Computer Science", "Electrical", "Mechanical", "Civil", "Chemical"])
             if st.button("Save Profile"):
                 st.success("Profile saved (demo)")
-        elif self.current_step == 2:
-            st.subheader("📄 Resume Building")
-            st.write("Build your resume here")
-            skills = st.text_area("Skills (comma separated)")
-            projects = st.text_area("Projects")
-            if st.button("Save Resume"):
-                st.success("Resume saved (demo)")
-        elif self.current_step == 3:
-            st.subheader("🧠 Skill Assessment")
-            st.write("Take skill assessment tests")
-            st.selectbox("Select Test", ["Programming", "Aptitude", "Technical", "Soft Skills"])
-        elif self.current_step == 4:
-            st.subheader("🔍 Job Search")
-            st.write("Search for jobs")
-        elif self.current_step == 5:
-            st.subheader("📝 Application")
-            st.write("Apply for jobs")
-        elif self.current_step == 6:
-            st.subheader("🎤 Interview Preparation")
-            st.write("Prepare for interviews")
-        elif self.current_step == 7:
-            st.subheader("💼 Interview")
-            st.write("Interview process")
-        elif self.current_step == 8:
-            st.subheader("🏆 Offer")
-            st.write("Review and accept offers")
         else:
             st.write(f"Step {self.current_step} content would go here")
-        
-        # Navigation buttons INSIDE the display method
-        st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("◀ Previous Step", key="student_nav_prev", disabled=(self.current_step <= 1)):
-                if self.current_step > 1:
-                    self.current_step -= 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["student"]["current_step"] = self.current_step
-                    st.rerun()
-        with col2:
-            st.write(f"**Step {self.current_step} of 8**")
-        with col3:
-            if st.button("Next Step ▶", key="student_nav_next", disabled=(self.current_step >= 8)):
-                if self.current_step < 8:
-                    self.current_step += 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["student"]["current_step"] = self.current_step
-                    st.rerun()
 '''
     
     with open(file_path, 'w') as f:
         f.write(content)
-    print(f"✅ Created minimal student_flow.py (WITH NAVIGATION)")
+    print(f"✅ Created minimal student_flow.py")
 
 def create_minimal_college_flow():
     """Create minimal college_flow.py"""
@@ -899,55 +727,10 @@ class CollegeFlow:
     def display(self):
         st.header("🏫 College Admin Dashboard")
         st.info(f"Current Step: {self.current_step}")
-        
-        if self.current_step == 1:
-            st.subheader("📊 Dashboard Overview")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Students", "1,250")
-            with col2:
-                st.metric("Placement %", "85%")
-            with col3:
-                st.metric("Active Companies", "45")
-        elif self.current_step == 2:
-            st.subheader("👨‍🎓 Student Management")
-            st.write("Manage student records")
-        elif self.current_step == 3:
-            st.subheader("🤝 Company Coordination")
-            st.write("Coordinate with companies")
-        elif self.current_step == 4:
-            st.subheader("📋 Job Postings")
-            st.write("Manage job postings")
-        elif self.current_step == 5:
-            st.subheader("📈 Placement Statistics")
-            st.write("View placement statistics")
-        elif self.current_step == 6:
-            st.subheader("📄 Reports")
-            st.write("Generate reports")
-        else:
-            st.write(f"Step {self.current_step} content would go here")
-        
-        # Navigation buttons
-        st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("◀ Previous Step", key="college_nav_prev", disabled=(self.current_step <= 1)):
-                if self.current_step > 1:
-                    self.current_step -= 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["college"]["current_step"] = self.current_step
-                    st.rerun()
-        with col2:
-            st.write(f"**Step {self.current_step} of 6**")
-        with col3:
-            if st.button("Next Step ▶", key="college_nav_next", disabled=(self.current_step >= 6)):
-                if self.current_step < 6:
-                    self.current_step += 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["college"]["current_step"] = self.current_step
-                    st.rerun()
+        st.write("College administration features:")
+        st.write("- Student management")
+        st.write("- Placement statistics")
+        st.write("- Company coordination")
 '''
     
     with open(file_path, 'w') as f:
@@ -973,51 +756,16 @@ class RecruiterFlow:
         self.db_manager = db_manager
         self.demo_mode = demo_mode
     
-    def display(self):
+    def display(self, current_step=None):
+        if current_step:
+            self.current_step = current_step
+        
         st.header("💼 Recruiter Dashboard")
         st.info(f"Current Step: {self.current_step}")
-        
-        if self.current_step == 1:
-            st.subheader("🏢 Company Profile")
-            company_name = st.text_input("Company Name")
-            industry = st.selectbox("Industry", ["IT", "Finance", "Manufacturing", "Healthcare", "Education"])
-        elif self.current_step == 2:
-            st.subheader("📝 Post Jobs")
-            job_title = st.text_input("Job Title")
-            job_description = st.text_area("Job Description")
-        elif self.current_step == 3:
-            st.subheader("📋 Review Applications")
-            st.write("Review candidate applications")
-        elif self.current_step == 4:
-            st.subheader("📅 Schedule Interviews")
-            st.write("Schedule interviews with candidates")
-        elif self.current_step == 5:
-            st.subheader("🎉 Make Offers")
-            st.write("Make job offers to selected candidates")
-        else:
-            st.write(f"Step {self.current_step} content would go here")
-        
-        # Navigation buttons
-        st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("◀ Previous Step", key="recruiter_nav_prev", disabled=(self.current_step <= 1)):
-                if self.current_step > 1:
-                    self.current_step -= 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["recruiter"]["current_step"] = self.current_step
-                    st.rerun()
-        with col2:
-            st.write(f"**Step {self.current_step} of 5**")
-        with col3:
-            if st.button("Next Step ▶", key="recruiter_nav_next", disabled=(self.current_step >= 5)):
-                if self.current_step < 5:
-                    self.current_step += 1
-                    # Update session state
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["recruiter"]["current_step"] = self.current_step
-                    st.rerun()
+        st.write("Recruiter features:")
+        st.write("- Post jobs")
+        st.write("- Review candidates")
+        st.write("- Schedule interviews")
 '''
     
     with open(file_path, 'w') as f:
@@ -1032,3 +780,5 @@ st.markdown("""
     <p>Built with ❤️ using Streamlit & Python</p>
 </div>
 """, unsafe_allow_html=True)
+
+find the errors and give me correct and updated working code
