@@ -85,7 +85,7 @@ class WorkflowManager:
         return False
     
     def display_student_workflow(self):
-        """Display student workflow steps"""
+        """Display student workflow steps - NO NAVIGATION BUTTONS"""
         st.subheader("📋 Student Placement Journey")
         
         workflow = self.workflows["student"]
@@ -95,116 +95,105 @@ class WorkflowManager:
         progress = current_step / len(workflow["steps"])
         st.progress(progress)
         
-        # Display steps
+        # Display current step info
+        st.write(f"**Current Step:** {current_step}/8")
+        
+        # Display steps with status
         for step in workflow["steps"]:
             status_icon = "✅" if step["id"] < current_step else "🔄" if step["id"] == current_step else "⏳"
             status_color = "green" if step["id"] < current_step else "blue" if step["id"] == current_step else "gray"
             
-            st.markdown(f"""
-            <div style="border-left: 4px solid {status_color}; padding-left: 10px; margin: 10px 0;">
-                <b>{status_icon} Step {step['id']}: {step['name']}</b>
-            </div>
-            """, unsafe_allow_html=True)
+            if step["id"] == current_step:
+                st.markdown(f"""
+                <div style="border-left: 4px solid {status_color}; padding-left: 10px; margin: 10px 0; background-color: #f0f8ff;">
+                    <b>{status_icon} Step {step['id']}: {step['name']}</b>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="border-left: 4px solid {status_color}; padding-left: 10px; margin: 10px 0;">
+                    {status_icon} Step {step['id']}: {step['name']}
+                </div>
+                """, unsafe_allow_html=True)
         
-        # Navigation
-        col1, col2 = st.columns(2)
-        with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", key="sidebar_student_prev"):
-                workflow["current_step"] -= 1
-                self.save_to_session_state()
-                st.rerun()
-        with col2:
-            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="sidebar_student_next"):
-                workflow["current_step"] += 1
-                self.save_to_session_state()
-                st.rerun()
+        # NO NAVIGATION BUTTONS HERE - They are handled in main app
         
         # Save to session state
         self.save_to_session_state()
     
     def display_college_workflow(self):
-        """Display college admin workflow"""
+        """Display college admin workflow - NO NAVIGATION BUTTONS"""
         st.subheader("🏫 College Placement Management")
         
         workflow = self.workflows["college"]
         current_step = workflow["current_step"]
         
+        # Display current step info
+        st.write(f"**Current Step:** {current_step}/8")
+        
         # Display as a timeline
         for step in workflow["steps"]:
-            if step["id"] <= current_step:
-                st.success(f"✅ {step['name']}")
+            if step["id"] == current_step:
+                st.success(f"🔄 **Step {step['id']}: {step['name']}**")
+            elif step["id"] < current_step:
+                st.write(f"✅ Step {step['id']}: {step['name']}")
             else:
-                st.info(f"⏳ {step['name']}")
+                st.info(f"⏳ Step {step['id']}: {step['name']}")
         
-        # Navigation
-        col1, col2 = st.columns(2)
-        with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", key="sidebar_college_prev"):
-                workflow["current_step"] -= 1
-                self.save_to_session_state()
-                st.rerun()
-        with col2:
-            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="sidebar_college_next"):
-                workflow["current_step"] += 1
-                self.save_to_session_state()
-                st.rerun()
+        # NO NAVIGATION BUTTONS HERE - They are handled in main app
         
         # Save to session state
         self.save_to_session_state()
     
     def display_recruiter_workflow(self):
-        """Display recruiter workflow"""
+        """Display recruiter workflow - NO NAVIGATION BUTTONS"""
         st.subheader("💼 Recruiter Hiring Process")
         
         workflow = self.workflows["recruiter"]
         current_step = workflow["current_step"]
         
-        # Visual timeline
-        cols = st.columns(len(workflow["steps"]))
-        for idx, step in enumerate(workflow["steps"]):
-            with cols[idx]:
-                if step["id"] < current_step:
-                    st.markdown(f"<div style='background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
-                elif step["id"] == current_step:
-                    st.markdown(f"<div style='background-color: #2196F3; color: white; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div style='background-color: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center;'><b>{step['id']}</b><br>{step['name'].split()[0]}</div>", unsafe_allow_html=True)
+        # Display current step info
+        st.write(f"**Current Step:** {current_step}/8")
         
-        # Navigation
-        col1, col2 = st.columns(2)
-        with col1:
-            if current_step > 1 and st.button("⬅️ Previous Step", key="sidebar_recruiter_prev"):
-                workflow["current_step"] -= 1
-                self.save_to_session_state()
-                st.rerun()
-        with col2:
-            if current_step < len(workflow["steps"]) and st.button("Next Step ➡️", key="sidebar_recruiter_next"):
-                workflow["current_step"] += 1
-                self.save_to_session_state()
-                st.rerun()
+        # Simple list display instead of visual timeline (to avoid complex HTML)
+        for step in workflow["steps"]:
+            if step["id"] == current_step:
+                st.markdown(f"**🔄 Step {step['id']}: {step['name']}**")
+            elif step["id"] < current_step:
+                st.markdown(f"✅ Step {step['id']}: {step['name']}")
+            else:
+                st.markdown(f"⏳ Step {step['id']}: {step['name']}")
+        
+        # NO NAVIGATION BUTTONS HERE - They are handled in main app
         
         # Save to session state
         self.save_to_session_state()
     
     def display_observer_dashboard(self):
-        """Dashboard for observers/judges"""
+        """Dashboard for observers/judges - NO NAVIGATION BUTTONS"""
         st.subheader("👀 Platform Overview")
-        st.info("Select a role to explore the systematic workflows")
+        st.info("Monitor platform workflows - Use main content for navigation")
         
         # Show quick stats for all workflows
         col1, col2, col3 = st.columns(3)
         with col1:
+            current_step = self.workflows['student']['current_step']
             st.metric("Student Progress", 
-                     f"Step {self.workflows['student']['current_step']}/8",
-                     f"{self.workflows['student']['current_step']*12.5}%")
+                     f"Step {current_step}/8",
+                     f"{current_step*12.5}%")
         with col2:
+            current_step = self.workflows['college']['current_step']
             st.metric("College Progress", 
-                     f"Step {self.workflows['college']['current_step']}/8",
-                     f"{self.workflows['college']['current_step']*12.5}%")
+                     f"Step {current_step}/8",
+                     f"{current_step*12.5}%")
         with col3:
+            current_step = self.workflows['recruiter']['current_step']
             st.metric("Recruiter Progress", 
-                     f"Step {self.workflows['recruiter']['current_step']}/8",
-                     f"{self.workflows['recruiter']['current_step']*12.5}%")
+                     f"Step {current_step}/8",
+                     f"{current_step*12.5}%")
+        
+        # Quick navigation note
+        st.caption("💡 Navigation buttons are in the main content area")
     
     def display_observer_view(self):
         """Observer view of the entire system"""
