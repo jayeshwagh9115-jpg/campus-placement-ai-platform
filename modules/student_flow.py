@@ -13,9 +13,10 @@ class StudentFlow:
         self.total_steps = 8
         self.db_manager = None
         self.demo_mode = True
-        self.student_id = None  # Store student ID after successful save
+        self.student_id = None
+        self.user_id = None  # Add user_id for your schema
         
-        # Initialize student data structure for all 8 steps
+        # Initialize student data structure
         self.student_data = {
             "profile": {
                 "full_name": "",
@@ -23,10 +24,10 @@ class StudentFlow:
                 "phone": "",
                 "roll_number": "",
                 "department": "",
-                "year": "",
+                "semester": "",  # Changed from 'year' to match your schema
                 "cgpa": 0.0,
                 "backlogs": 0,
-                "skills": [],  # This will match database column
+                "skills": [],
                 "career_interests": [],
                 "linkedin_profile": "",
                 "github_profile": "",
@@ -46,17 +47,14 @@ class StudentFlow:
             "placement_status": {}
         }
         
-        # Load demo data if no db connection
         if self.demo_mode:
             self.load_demo_data()
     
     def set_database_manager(self, db_manager, demo_mode=False):
-        """Set the database manager for this flow"""
         self.db_manager = db_manager
         self.demo_mode = demo_mode
         
-        # Load data based on mode
-        if not self.demo_mode and self.db_manager and self.db_manager.is_connected:
+        if not self.demo_mode and self.db_manager:
             self.load_from_database()
         else:
             self.load_demo_data()
@@ -70,7 +68,7 @@ class StudentFlow:
                 "phone": "+91 9876543210",
                 "roll_number": "2023CS001",
                 "department": "Computer Science",
-                "year": "Final Year",
+                "semester": "6",  # Changed to match your schema
                 "cgpa": 8.5,
                 "backlogs": 0,
                 "skills": ["Python", "Java", "SQL", "React", "Machine Learning"],
@@ -96,310 +94,231 @@ class StudentFlow:
     def load_from_database(self):
         """Load student data from database"""
         try:
-            if self.db_manager and hasattr(self.db_manager, 'get_student_profile'):
-                # Get student email from session state or use default
-                email = st.session_state.get('student_email', self.student_data["profile"]["email"])
-                
-                if email:
-                    # Try to get student profile from database
-                    profile = self.db_manager.get_student_profile(email)
-                    if profile:
-                        self.student_data["profile"] = profile
-                        self.student_id = profile.get('id')
+            if self.db_manager and hasattr(self.db_manager, 'get_user_by_id'):
+                # Check if user is logged in
+                if 'user_id' in st.session_state:
+                    user_id = st.session_state['user_id']
+                    user = self.db_manager.get_user_by_id(user_id)
+                    
+                    if user:
+                        # Update profile from user table
+                        self.student_data["profile"].update({
+                            "full_name": user.get('full_name', ''),
+                            "email": user.get('email', ''),
+                            "phone": user.get('phone', '')
+                        })
                         
-                        # Ensure career_interests exists
-                        if 'career_interests' not in self.student_data["profile"]:
-                            self.student_data["profile"]["career_interests"] = []
-                        
-                        # Load other data if student_id exists
-                        if self.student_id:
-                            # Load education
-                            if hasattr(self.db_manager, 'get_student_education'):
-                                try:
-                                    self.student_data["education"] = self.db_manager.get_student_education(self.student_id)
-                                except:
-                                    self.student_data["education"] = []
+                        # Get student data
+                        student = self.db_manager.get_student_by_user_id(user_id)
+                        if student:
+                            self.student_id = student.get('student_id')
+                            self.student_data["profile"].update({
+                                "roll_number": student.get('roll_number', ''),
+                                "department": student.get('department', ''),
+                                "semester": str(student.get('semester', '')),
+                                "cgpa": student.get('cgpa', 0.0),
+                                "backlogs": student.get('backlogs', 0),
+                                "github_profile": student.get('github_profile', ''),
+                                "linkedin_profile": student.get('linkedin_profile', ''),
+                                "portfolio_link": student.get('portfolio_website', '')
+                            })
                             
-                            # Load projects
-                            if hasattr(self.db_manager, 'get_student_projects'):
-                                try:
-                                    self.student_data["projects"] = self.db_manager.get_student_projects(self.student_id)
-                                except:
-                                    self.student_data["projects"] = []
+                            # Load skills
+                            skills_data = self.db_manager.get_student_skills(self.student_id)
+                            self.student_data["profile"]["skills"] = [skill['skill_name'] for skill in skills_data]
                             
-                            # Load internships
-                            if hasattr(self.db_manager, 'get_student_internships'):
-                                try:
-                                    self.student_data["internships"] = self.db_manager.get_student_internships(self.student_id)
-                                except:
-                                    self.student_data["internships"] = []
-                            
-                            # Load certifications
-                            if hasattr(self.db_manager, 'get_student_certifications'):
-                                try:
-                                    self.student_data["certifications"] = self.db_manager.get_student_certifications(self.student_id)
-                                except:
-                                    self.student_data["certifications"] = []
-                            
-                            # Load applications
-                            if hasattr(self.db_manager, 'get_student_applications'):
-                                try:
-                                    self.student_data["job_applications"] = self.db_manager.get_student_applications(self.student_id)
-                                except:
-                                    self.student_data["job_applications"] = []
-                                    
-                        st.success("✅ Loaded data from database")
-                    else:
-                        st.info("No existing profile found in database")
+                            st.success("✅ Loaded data from database")
         except Exception as e:
             st.error(f"Error loading from database: {e}")
             self.load_demo_data()
     
     def save_profile_to_database(self):
-        """Save student profile to database"""
+        """Save student profile to database - COMPATIBLE WITH YOUR DB_MANAGER"""
         try:
             if self.demo_mode or not self.db_manager:
                 st.warning("⚠️ Running in demo mode - Profile saved locally only")
                 return {"success": True, "id": "demo", "error": None}
             
-            if not self.db_manager.is_connected:
-                st.error("❌ Not connected to database")
-                return {"success": False, "id": None, "error": "Database not connected"}
+            profile = self.student_data["profile"]
             
-            # Prepare profile data
-            profile_data = self.prepare_profile_data()
-            
-            # Validate required fields
-            required_fields = ['full_name', 'email', 'roll_number']
-            for field in required_fields:
-                if not profile_data.get(field):
-                    return {"success": False, "id": None, "error": f"Missing required field: {field}"}
-            
-            # Try to save profile
-            if hasattr(self.db_manager, 'save_student_profile'):
-                result = self.db_manager.save_student_profile(profile_data)
+            # Check if user already exists (logged in)
+            if 'user_id' in st.session_state:
+                user_id = st.session_state['user_id']
                 
-                if isinstance(result, dict):
-                    if result.get('success'):
-                        self.student_id = result.get('id')
-                        st.session_state['student_id'] = self.student_id
-                        st.session_state['student_email'] = profile_data['email']
-                        return result
-                    else:
-                        error_msg = result.get('error', 'Unknown error')
-                        st.error(f"❌ Failed to save profile: {error_msg}")
-                        return result
-                elif result:  # Backward compatibility
-                    self.student_id = self.get_student_id_from_db()
-                    return {"success": True, "id": self.student_id, "error": None}
+                # Update student record
+                student_id = self.create_or_update_student(user_id, profile)
+                if student_id:
+                    self.student_id = student_id
+                    st.session_state['student_id'] = student_id
+                    return {"success": True, "id": student_id, "error": None}
                 else:
-                    st.error("❌ Failed to save profile: No result returned")
-                    return {"success": False, "id": None, "error": "No result returned"}
+                    return {"success": False, "id": None, "error": "Failed to save student record"}
+            
             else:
-                # Fallback to direct insert
-                try:
-                    result = self.db_manager.insert('students', profile_data)
-                    if result:
-                        self.student_id = result.get('id')
-                        st.success(f"✅ Profile saved using direct insert! ID: {self.student_id}")
-                        return {"success": True, "id": self.student_id, "error": None}
-                    else:
-                        st.error("❌ Direct insert failed")
-                        return {"success": False, "id": None, "error": "Direct insert failed"}
-                except Exception as e:
-                    st.error(f"❌ Insert error: {e}")
-                    return {"success": False, "id": None, "error": str(e)}
+                # Create new user and student
+                user_id = self.create_user_account(profile)
+                if user_id:
+                    st.session_state['user_id'] = user_id
                     
+                    # Create student record
+                    student_id = self.create_or_update_student(user_id, profile)
+                    if student_id:
+                        self.student_id = student_id
+                        st.session_state['student_id'] = student_id
+                        st.session_state['student_email'] = profile['email']
+                        return {"success": True, "id": student_id, "error": None}
+                    else:
+                        return {"success": False, "id": None, "error": "Failed to create student record"}
+                else:
+                    return {"success": False, "id": None, "error": "Failed to create user account"}
+                
         except Exception as e:
             error_msg = f"Error saving to database: {str(e)}"
             st.error(f"❌ {error_msg}")
             return {"success": False, "id": None, "error": error_msg}
     
-    def prepare_profile_data(self):
-        """Prepare profile data to match database columns"""
-        profile = self.student_data["profile"].copy()
-        
-        mapped_data = {
-            "full_name": profile.get("full_name", ""),
-            "email": profile.get("email", ""),
-            "phone": profile.get("phone", ""),
-            "roll_number": profile.get("roll_number", ""),
-            "department": profile.get("department", ""),
-            "cgpa": float(profile.get("cgpa", 0.0)),
-            "skills": profile.get("skills", []),
-            "backlogs": int(profile.get("backlogs", 0)),
-            "linkedin_profile": profile.get("linkedin_profile", ""),
-            "github_profile": profile.get("github_profile", ""),
-            "portfolio_link": profile.get("portfolio_link", ""),
-            "created_at": profile.get("created_at", datetime.now().isoformat())
-        }
-        
-        # Map year to year_of_study
-        year = profile.get("year", "")
-        if "First" in year:
-            mapped_data["year_of_study"] = 1
-        elif "Second" in year:
-            mapped_data["year_of_study"] = 2
-        elif "Third" in year:
-            mapped_data["year_of_study"] = 3
-        elif "Final" in year:
-            mapped_data["year_of_study"] = 4
-        elif "Post" in year:
-            mapped_data["year_of_study"] = 5
-        else:
-            mapped_data["year_of_study"] = 4
-        
-        # Clean up empty strings
-        for key, value in mapped_data.items():
-            if value == "":
-                mapped_data[key] = None
-        
-        return mapped_data
-    
-    def get_student_id_from_db(self):
-        """Get student ID from database based on email"""
+    def create_user_account(self, profile):
+        """Create a new user account"""
         try:
-            if self.db_manager and hasattr(self.db_manager, 'get_student_by_email'):
-                email = self.student_data["profile"]["email"]
-                if email:
-                    student = self.db_manager.get_student_by_email(email)
-                    return student.get('id') if student else None
+            # Generate username from email
+            username = profile['email'].split('@')[0]
+            
+            # Create user (with a default password that should be changed later)
+            user_id = self.db_manager.create_user(
+                username=username,
+                email=profile['email'],
+                password="default123",  # User should change this!
+                role="student",
+                full_name=profile['full_name'],
+                phone=profile['phone']
+            )
+            return user_id
         except Exception as e:
-            st.warning(f"Could not get student ID: {e}")
-        return None
-    
-    def save_education_to_database(self):
-        """Save education records to database"""
-        if not self.student_id or self.demo_mode or not self.db_manager:
-            return
-        
-        if self.student_data["education"] and hasattr(self.db_manager, 'save_student_education'):
-            for edu in self.student_data["education"]:
-                edu['student_id'] = self.student_id
-                self.db_manager.save_student_education(edu)
-    
-    def save_projects_to_database(self):
-        """Save projects to database"""
-        if not self.student_id or self.demo_mode or not self.db_manager:
-            return
-        
-        if self.student_data["projects"] and hasattr(self.db_manager, 'save_student_project'):
-            for project in self.student_data["projects"]:
-                project['student_id'] = self.student_id
-                self.db_manager.save_student_project(project)
-    
-    def save_internships_to_database(self):
-        """Save internships to database"""
-        if not self.student_id or self.demo_mode or not self.db_manager:
-            return
-        
-        if self.student_data["internships"] and hasattr(self.db_manager, 'save_student_internship'):
-            for internship in self.student_data["internships"]:
-                internship['student_id'] = self.student_id
-                self.db_manager.save_student_internship(internship)
-    
-    def save_certifications_to_database(self):
-        """Save certifications to database"""
-        if not self.student_id or self.demo_mode or not self.db_manager:
-            return
-        
-        if self.student_data["certifications"] and hasattr(self.db_manager, 'save_student_certification'):
-            for cert in self.student_data["certifications"]:
-                cert['student_id'] = self.student_id
-                self.db_manager.save_student_certification(cert)
-    
-    def save_application_to_database(self, application_data):
-        """Save job application to database"""
-        if not self.student_id or self.demo_mode or not self.db_manager:
+            st.error(f"Error creating user: {e}")
             return None
-        
-        try:
-            if hasattr(self.db_manager, 'create_application'):
-                # Add student_id to application
-                application_data['student_id'] = self.student_id
-                
-                # Get job_id if available
-                if 'job_id' not in application_data:
-                    application_data['job_id'] = None
-                
-                result = self.db_manager.create_application(application_data)
-                return result
-        except Exception as e:
-            st.warning(f"Could not save application to database: {e}")
-        
-        return None
     
-    def display(self):
-        """Main display method"""
-        st.header("👨‍🎓 Student Placement Journey")
-        
-        # Display database status
-        if self.db_manager and hasattr(self.db_manager, 'is_connected'):
-            if self.db_manager.is_connected and not self.demo_mode:
-                st.success("✅ Connected to database")
+    def create_or_update_student(self, user_id, profile):
+        """Create or update student record"""
+        try:
+            # Check if student already exists
+            student = self.db_manager.get_student_by_user_id(user_id)
+            
+            # Convert semester to integer
+            semester = int(profile['semester']) if profile['semester'] and profile['semester'].isdigit() else 6
+            
+            # Convert year to graduation_year
+            # Since your schema doesn't have 'year', we'll estimate graduation year
+            current_year = datetime.now().year
+            graduation_year = current_year + (6 - semester) if semester <= 6 else current_year
+            
+            if student:
+                # Update existing student
+                student_id = student['student_id']
+                self.db_manager.update_student_profile(
+                    student_id=student_id,
+                    roll_number=profile['roll_number'],
+                    department=profile['department'],
+                    semester=semester,
+                    cgpa=float(profile['cgpa']),
+                    backlogs=profile['backlogs'],
+                    graduation_year=graduation_year,
+                    github_profile=profile['github_profile'],
+                    linkedin_profile=profile['linkedin_profile'],
+                    portfolio_website=profile['portfolio_link']
+                )
+                
+                # Update skills
+                self.update_student_skills(student_id, profile['skills'])
+                
+                return student_id
             else:
-                st.warning("⚠️ Demo mode - data saved locally")
-        
-        # Display current step
-        self.display_progress_bar()
-        
-        # Display step content
-        if self.current_step == 1:
-            self.step1_profile_creation()
-        elif self.current_step == 2:
-            self.step2_ai_resume_building()
-        elif self.current_step == 3:
-            self.step3_nep_course_planning()
-        elif self.current_step == 4:
-            self.step4_internship_match()
-        elif self.current_step == 5:
-            self.step5_career_path_planning()
-        elif self.current_step == 6:
-            self.step6_placement_prediction()
-        elif self.current_step == 7:
-            self.step7_interview_preparation()
-        elif self.current_step == 8:
-            self.step8_placement_tracking()
-        else:
-            st.error("Invalid step number")
+                # Create new student
+                student_id = self.db_manager.create_student(
+                    user_id=user_id,
+                    roll_number=profile['roll_number'],
+                    department=profile['department'],
+                    semester=semester,
+                    cgpa=float(profile['cgpa']),
+                    graduation_year=graduation_year
+                )
+                
+                # Add skills
+                self.update_student_skills(student_id, profile['skills'])
+                
+                return student_id
+        except Exception as e:
+            st.error(f"Error saving student: {e}")
+            return None
+    
+    def update_student_skills(self, student_id, skills):
+        """Update student skills in database"""
+        try:
+            # First, remove existing skills
+            if hasattr(self.db_manager, 'execute_query'):
+                self.db_manager.execute_query(
+                    "DELETE FROM student_skills WHERE student_id = ?",
+                    (student_id,)
+                )
+            
+            # Add new skills
+            for skill in skills:
+                self.db_manager.add_student_skill(
+                    student_id=student_id,
+                    skill_name=skill,
+                    skill_level='Intermediate',
+                    skill_category='Technical'
+                )
+        except Exception as e:
+            st.warning(f"Could not update skills: {e}")
     
     def step1_profile_creation(self):
-        """Step 1: Profile Creation"""
+        """Step 1: Profile Creation - UPDATED for your database schema"""
         st.subheader("🎯 Profile Creation")
         st.info("Create your student profile to get started with placement preparation")
+        
+        # Check if user is logged in
+        is_logged_in = 'user_id' in st.session_state
+        if is_logged_in:
+            st.success(f"👤 Logged in as: {st.session_state.get('username', 'User')}")
         
         with st.form("student_profile_form"):
             col1, col2 = st.columns(2)
             
             with col1:
                 full_name = st.text_input("Full Name*", 
-                                         value=self.student_data["profile"].get("full_name", ""),
+                                         value=self.student_data["profile"]["full_name"],
                                          placeholder="Enter your full name")
                 email = st.text_input("Email*", 
-                                     value=self.student_data["profile"].get("email", ""),
-                                     placeholder="student@college.edu")
+                                     value=self.student_data["profile"]["email"],
+                                     placeholder="student@college.edu",
+                                     disabled=is_logged_in)  # Email can't be changed if logged in
                 phone = st.text_input("Phone Number", 
-                                     value=self.student_data["profile"].get("phone", ""),
+                                     value=self.student_data["profile"]["phone"],
                                      placeholder="+91 9876543210")
                 roll_number = st.text_input("Roll Number*", 
-                                           value=self.student_data["profile"].get("roll_number", ""),
+                                           value=self.student_data["profile"]["roll_number"],
                                            placeholder="e.g., 20BCS001")
             
             with col2:
-                # Safely get department index
-                department_options = ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
-                                    "Civil Engineering", "Information Technology", "Electronics", "Others"]
-                current_dept = self.student_data["profile"].get("department", "")
-                dept_index = department_options.index(current_dept) if current_dept in department_options else 0
+                department = st.selectbox("Department*",
+                    ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
+                     "Civil Engineering", "Information Technology", "Electronics", "Others"],
+                    index=0 if not self.student_data["profile"]["department"] else
+                    ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
+                     "Civil Engineering", "Information Technology", "Electronics", "Others"].index(
+                         self.student_data["profile"]["department"]
+                     ) if self.student_data["profile"]["department"] in 
+                     ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
+                      "Civil Engineering", "Information Technology", "Electronics", "Others"] else 0)
                 
-                department = st.selectbox("Department*", department_options, index=dept_index)
-                
-                # Safely get year index
-                year_options = ["First Year", "Second Year", "Third Year", "Final Year", "Post Graduate"]
-                current_year = self.student_data["profile"].get("year", "")
-                year_index = year_options.index(current_year) if current_year in year_options else 3
-                
-                year = st.selectbox("Year of Study*", year_options, index=year_index)
+                # Changed from 'year' to 'semester' to match your schema
+                semester = st.selectbox("Semester*",
+                    ["1", "2", "3", "4", "5", "6", "7", "8"],
+                    index=5 if not self.student_data["profile"]["semester"] else
+                    ["1", "2", "3", "4", "5", "6", "7", "8"].index(
+                        self.student_data["profile"]["semester"]
+                    ) if self.student_data["profile"]["semester"] in 
+                    ["1", "2", "3", "4", "5", "6", "7", "8"] else 5)
             
             col3, col4 = st.columns(2)
             with col3:
@@ -421,7 +340,7 @@ class StudentFlow:
             
             skills = st.multiselect("Technical Skills*", skills_options, default=valid_default_skills)
             
-            # Career interests
+            # Career interests (for local storage only - not in your DB schema)
             st.subheader("Career Interests")
             career_interests_options = ["Software Development", "Data Science", "Product Management",
                                        "Research", "Consulting", "Entrepreneurship", "Higher Studies",
@@ -447,7 +366,7 @@ class StudentFlow:
             
             if submitted:
                 # Validate required fields
-                if not all([full_name, email, roll_number, department, year]):
+                if not all([full_name, email, roll_number, department, semester]):
                     st.error("Please fill in all required fields (*)")
                 else:
                     # Update student data
@@ -457,7 +376,7 @@ class StudentFlow:
                         "phone": phone,
                         "roll_number": roll_number,
                         "department": department,
-                        "year": year,
+                        "semester": semester,  # Changed from 'year'
                         "cgpa": cgpa,
                         "backlogs": backlogs,
                         "skills": skills,
@@ -487,6 +406,10 @@ class StudentFlow:
                         
                         # Still show summary even if DB save failed
                         self.display_profile_summary()
+    
+    # The rest of your methods (step2 to step8) remain mostly the same
+    # Just need to update the display_profile_summary method
+    
     
     def step2_ai_resume_building(self):
         """Step 2: AI Resume Building"""
@@ -1418,7 +1341,7 @@ class StudentFlow:
                 st.write(f"**Department:** {profile.get('department', '')}")
             
             with col2:
-                st.write(f"**Year:** {profile.get('year', '')}")
+                st.write(f"**Semester:** {profile.get('semester', '')}")  # Changed from 'year'
                 st.write(f"**CGPA:** {profile.get('cgpa', '')}")
                 st.write(f"**Backlogs:** {profile.get('backlogs', '')}")
                 st.write(f"**Career Interests:** {', '.join(profile.get('career_interests', []))}")
