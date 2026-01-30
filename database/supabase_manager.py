@@ -5,6 +5,7 @@ import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import traceback
+import uuid
 
 class SupabaseManager:
     def __init__(self):
@@ -38,52 +39,19 @@ class SupabaseManager:
             except Exception as e:
                 self.connection_error = str(e)
                 print(f"⚠️ Connection test failed: {e}")
-                print("🔧 Creating tables if they don't exist...")
                 
-                # Try to create tables automatically
-                if self._create_tables_if_not_exist():
+                # Try direct API as fallback
+                if self._test_direct_api():
                     self.is_connected = True
                     self.connection_error = None
                 else:
-                    # Try direct API as fallback
-                    if self._test_direct_api():
-                        self.is_connected = True
-                        self.connection_error = None
-                    else:
-                        self.is_connected = False
-                        self.connection_error = "All connection attempts failed"
+                    self.is_connected = False
+                    self.connection_error = "All connection attempts failed"
                 
         except Exception as e:
             self.connection_error = str(e)
             print(f"❌ Failed to create Supabase client: {e}")
             self.is_connected = False
-    
-    def _create_tables_if_not_exist(self):
-        """Create tables if they don't exist"""
-        try:
-            # List of tables to check/create
-            tables = ['students', 'colleges', 'companies', 'job_postings', 'applications', 'users']
-            created_count = 0
-            
-            for table in tables:
-                try:
-                    # Try to select from table
-                    response = self.client.table(table).select('id').limit(1).execute()
-                    print(f"✅ Table '{table}' exists")
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if "not found" in error_str or "does not exist" in error_str or "relation" in error_str:
-                        print(f"⚠️ Table '{table}' doesn't exist. Creating...")
-                        # In Supabase, you typically create tables via SQL in the dashboard
-                        # For now, just note which tables are missing
-                        print(f"   Run SQL in Supabase dashboard to create '{table}' table")
-                    else:
-                        print(f"⚠️ Error checking table '{table}': {e}")
-            
-            return True
-        except Exception as e:
-            print(f"❌ Error in table creation check: {e}")
-            return False
     
     def _test_direct_api(self):
         """Test connection using direct REST API"""
@@ -132,6 +100,10 @@ class SupabaseManager:
                     else:
                         clean_data[key] = value
             
+            # Ensure we have an ID if it's not provided
+            if 'id' not in clean_data or not clean_data['id']:
+                clean_data['id'] = str(uuid.uuid4())
+            
             response = self.client.table(table).insert(clean_data).execute()
             
             if response.data and len(response.data) > 0:
@@ -166,6 +138,10 @@ class SupabaseManager:
                     else:
                         clean_data[key] = value
             
+            # Ensure we have an ID if it's not provided
+            if 'id' not in clean_data or not clean_data['id']:
+                clean_data['id'] = str(uuid.uuid4())
+            
             response = self.client.table(table).upsert(clean_data, on_conflict=on_conflict).execute()
             return response.data[0] if response.data else None
         except Exception as e:
@@ -184,7 +160,12 @@ class SupabaseManager:
             if filters:
                 for key, value in filters.items():
                     if value is not None:
-                        query = query.eq(key, value)
+                        if key.endswith('_like'):
+                            # Handle like queries
+                            actual_key = key.replace('_like', '')
+                            query = query.like(actual_key, f"%{value}%")
+                        else:
+                            query = query.eq(key, value)
             
             if limit:
                 query = query.limit(limit)
@@ -222,6 +203,11 @@ class SupabaseManager:
         if not self.is_connected or not self.client:
             return None
         
+        # Ensure id_value is not None
+        if not id_value:
+            print(f"❌ Cannot update {table}: Invalid ID (None or empty)")
+            return None
+        
         try:
             # Clean update data
             clean_updates = {}
@@ -241,6 +227,11 @@ class SupabaseManager:
     def delete(self, table: str, id_value: str) -> bool:
         """Delete data from table"""
         if not self.is_connected or not self.client:
+            return False
+        
+        # Ensure id_value is not None
+        if not id_value:
+            print(f"❌ Cannot delete from {table}: Invalid ID (None or empty)")
             return False
         
         try:
@@ -282,6 +273,10 @@ class SupabaseManager:
             # Add default role if not specified
             if 'role' not in user_data:
                 user_data['role'] = 'student'
+            
+            # Ensure ID is present
+            if 'id' not in user_data or not user_data['id']:
+                user_data['id'] = str(uuid.uuid4())
             
             # Check if we're inserting into 'users' or 'students' table
             # Determine table based on available data
@@ -363,68 +358,6 @@ class SupabaseManager:
             print(f"Error getting user by email: {e}")
             return None
     
-    # ---------- TABLE VALIDATION METHODS ----------
-    def get_table_columns(self, table_name: str) -> List[str]:
-        """Get column names for a table"""
-        try:
-            # Get one record to infer columns
-            sample = self.select(table_name, limit=1)
-            if sample and len(sample) > 0:
-                return list(sample[0].keys())
-            else:
-                # Try to get schema via information_schema (limited in Supabase)
-                print(f"⚠️ No data in {table_name} to infer columns")
-                return []
-        except Exception as e:
-            print(f"❌ Error getting columns for {table_name}: {e}")
-            return []
-    
-    def validate_data_against_table(self, table_name: str, data: Dict) -> Dict:
-        """Validate data against table structure"""
-        validation_result = {
-            'valid': True,
-            'errors': [],
-            'warnings': [],
-            'extra_fields': [],
-            'missing_fields': []
-        }
-        
-        # Get actual columns from table
-        actual_columns = self.get_table_columns(table_name)
-        
-        if not actual_columns:
-            validation_result['warnings'].append(f"Cannot validate: Could not get columns for {table_name}")
-            return validation_result
-        
-        # Check for extra fields in data that don't exist in table
-        data_fields = list(data.keys())
-        for field in data_fields:
-            if field not in actual_columns:
-                validation_result['extra_fields'].append(field)
-                validation_result['warnings'].append(f"Field '{field}' not found in table '{table_name}'")
-        
-        # Check required fields (basic check)
-        required_fields = self._get_required_fields(table_name)
-        for field in required_fields:
-            if field not in data or data[field] is None or data[field] == '':
-                validation_result['missing_fields'].append(field)
-                validation_result['errors'].append(f"Required field '{field}' is missing")
-        
-        validation_result['valid'] = len(validation_result['errors']) == 0
-        return validation_result
-    
-    def _get_required_fields(self, table_name: str) -> List[str]:
-        """Get required fields for a table (simplified)"""
-        required_fields_map = {
-            'students': ['full_name', 'email', 'roll_number'],
-            'colleges': ['college_name', 'college_code'],
-            'companies': ['company_name', 'company_email'],
-            'job_postings': ['job_title', 'company_id'],
-            'applications': ['student_id', 'job_id'],
-            'users': ['email', 'full_name']
-        }
-        return required_fields_map.get(table_name, [])
-    
     # ---------- ENHANCED STUDENT METHODS ----------
     def save_student_profile(self, student_data):
         """Save student profile to database with better error handling"""
@@ -436,14 +369,8 @@ class SupabaseManager:
             return {"success": False, "error": error_msg, "id": None}
     
         try:
-            # Validate against table structure first
-            validation = self.validate_data_against_table('students', student_data)
-            if not validation['valid']:
-                print(f"❌ Validation failed: {validation['errors']}")
-                return {"success": False, "error": f"Validation failed: {validation['errors']}", "id": None}
-            
             # Ensure required fields
-            required_fields = ['full_name', 'email', 'roll_number']
+            required_fields = ['full_name', 'email']
             for field in required_fields:
                 if field not in student_data or not student_data[field]:
                     print(f"❌ Missing or empty required field: {field}")
@@ -453,31 +380,61 @@ class SupabaseManager:
             if 'created_at' not in student_data:
                 student_data['created_at'] = datetime.now().isoformat()
             
-            # Try upsert first (handles both insert and update)
-            print("💾 Attempting upsert...")
-            try:
-                result = self.upsert('students', student_data, on_conflict='email,roll_number')
-                if result:
-                    student_id = result.get('id')
-                    print(f"✅ Upsert successful: {student_id}")
-                    return {"success": True, "id": student_id, "data": result}
-                else:
-                    print("⚠️ Upsert returned no result")
-            except Exception as e1:
-                print(f"⚠️ Upsert failed: {e1}")
+            # Ensure ID is present
+            if 'id' not in student_data or not student_data['id']:
+                student_data['id'] = str(uuid.uuid4())
             
-            # If upsert fails, try insert
+            # Check if student already exists
+            email = student_data.get('email')
+            existing_student = None
+            
+            if email:
+                try:
+                    existing_student = self.get_student_by_email(email)
+                except:
+                    pass
+            
+            if existing_student:
+                # Update existing student
+                student_id = existing_student.get('id')
+                print(f"📝 Student exists, updating ID: {student_id}")
+                try:
+                    # Remove id from updates to avoid conflict
+                    update_data = {k: v for k, v in student_data.items() if k != 'id'}
+                    result = self.update('students', student_id, update_data)
+                    if result:
+                        print(f"✅ Student updated successfully: {student_id}")
+                        return {"success": True, "id": student_id, "data": result, "action": "updated"}
+                    else:
+                        print("⚠️ Update failed, trying upsert...")
+                except Exception as update_error:
+                    print(f"⚠️ Update failed: {update_error}")
+            
+            # Try insert for new student or if update failed
             print("💾 Attempting insert...")
             try:
                 result = self.insert('students', student_data)
                 if result:
                     student_id = result.get('id')
                     print(f"✅ Insert successful: {student_id}")
-                    return {"success": True, "id": student_id, "data": result}
+                    return {"success": True, "id": student_id, "data": result, "action": "inserted"}
                 else:
                     print("⚠️ Insert returned no result")
             except Exception as e2:
                 print(f"⚠️ Insert failed: {e2}")
+            
+            # Try upsert as fallback
+            print("💾 Attempting upsert...")
+            try:
+                result = self.upsert('students', student_data, on_conflict='email')
+                if result:
+                    student_id = result.get('id')
+                    print(f"✅ Upsert successful: {student_id}")
+                    return {"success": True, "id": student_id, "data": result, "action": "upserted"}
+                else:
+                    print("⚠️ Upsert returned no result")
+            except Exception as e1:
+                print(f"⚠️ Upsert failed: {e1}")
             
             # Try with direct API as last resort
             print("💾 Attempting direct API...")
@@ -488,6 +445,10 @@ class SupabaseManager:
                     "Content-Type": "application/json",
                     "Prefer": "return=representation"
                 }
+                
+                # Ensure ID is in the data
+                if 'id' not in student_data:
+                    student_data['id'] = str(uuid.uuid4())
                 
                 response = requests.post(
                     f"{self.url}/rest/v1/students",
@@ -501,7 +462,7 @@ class SupabaseManager:
                     if result and len(result) > 0:
                         student_id = result[0].get('id')
                         print(f"✅ Direct API successful: {student_id}")
-                        return {"success": True, "id": student_id, "data": result[0]}
+                        return {"success": True, "id": student_id, "data": result[0], "action": "direct_insert"}
                     else:
                         print("⚠️ Direct API returned empty result")
                 else:
@@ -536,6 +497,21 @@ class SupabaseManager:
         """Create a new student (wrapper for save_student_profile)"""
         return self.save_student_profile(student_data)
     
+    def update_student(self, student_id: str, updates: Dict) -> Dict:
+        """Update student profile"""
+        if not student_id:
+            return {"success": False, "error": "Student ID is required", "id": None}
+        
+        try:
+            result = self.update('students', student_id, updates)
+            if result:
+                return {"success": True, "id": student_id, "data": result}
+            else:
+                return {"success": False, "error": "Failed to update student", "id": student_id}
+        except Exception as e:
+            print(f"Error updating student: {e}")
+            return {"success": False, "error": str(e), "id": student_id}
+    
     def get_students(self, college_id: str = None) -> List[Dict]:
         """Get students"""
         if college_id:
@@ -563,14 +539,13 @@ class SupabaseManager:
     def save_college_profile(self, college_data: Dict) -> Dict:
         """Save college profile to database with better error handling"""
         try:
-            # Validate against table structure
-            validation = self.validate_data_against_table('colleges', college_data)
-            if not validation['valid']:
-                return {"success": False, "error": f"Validation failed: {validation['errors']}", "id": None}
-            
             # Add timestamp if not present
             if 'created_at' not in college_data:
                 college_data['created_at'] = datetime.now().isoformat()
+            
+            # Ensure ID is present
+            if 'id' not in college_data or not college_data['id']:
+                college_data['id'] = str(uuid.uuid4())
             
             result = self.upsert('colleges', college_data, on_conflict='college_code')
             if result:
@@ -591,10 +566,9 @@ class SupabaseManager:
     def save_company_profile(self, company_data: Dict) -> Dict:
         """Save company profile to database with better error handling"""
         try:
-            # Validate against table structure
-            validation = self.validate_data_against_table('companies', company_data)
-            if not validation['valid']:
-                return {"success": False, "error": f"Validation failed: {validation['errors']}", "id": None}
+            # Ensure ID is present
+            if 'id' not in company_data or not company_data['id']:
+                company_data['id'] = str(uuid.uuid4())
             
             result = self.upsert('companies', company_data, on_conflict='company_email')
             if result:
@@ -615,10 +589,9 @@ class SupabaseManager:
     def create_job(self, job_data: Dict) -> Dict:
         """Create a new job posting with validation"""
         try:
-            # Validate against table structure
-            validation = self.validate_data_against_table('job_postings', job_data)
-            if not validation['valid']:
-                return {"success": False, "error": f"Validation failed: {validation['errors']}", "id": None}
+            # Ensure ID is present
+            if 'id' not in job_data or not job_data['id']:
+                job_data['id'] = str(uuid.uuid4())
             
             result = self.insert('job_postings', job_data)
             if result:
@@ -633,14 +606,13 @@ class SupabaseManager:
     def create_application(self, app_data: Dict) -> Dict:
         """Create a new application with validation"""
         try:
-            # Validate against table structure
-            validation = self.validate_data_against_table('applications', app_data)
-            if not validation['valid']:
-                return {"success": False, "error": f"Validation failed: {validation['errors']}", "id": None}
-            
             # Add timestamp if not present
             if 'applied_date' not in app_data:
                 app_data['applied_date'] = datetime.now().isoformat()
+            
+            # Ensure ID is present
+            if 'id' not in app_data or not app_data['id']:
+                app_data['id'] = str(uuid.uuid4())
             
             result = self.insert('applications', app_data)
             if result:
@@ -700,6 +672,26 @@ class SupabaseManager:
     def get_all_applications(self) -> List[Dict]:
         """Get all applications"""
         return self.select_all('applications')
+    
+    def search_students(self, search_term: str) -> List[Dict]:
+        """Search students by name or email"""
+        try:
+            # Search in name
+            name_results = self.select('students', {'full_name_like': search_term})
+            # Search in email
+            email_results = self.select('students', {'email_like': search_term})
+            
+            # Combine and deduplicate
+            all_results = {}
+            for student in name_results + email_results:
+                student_id = student.get('id')
+                if student_id and student_id not in all_results:
+                    all_results[student_id] = student
+            
+            return list(all_results.values())
+        except Exception as e:
+            print(f"Error searching students: {e}")
+            return []
     
     # ---------- TEST & DEBUG METHODS ----------
     def test_connection(self) -> Dict:
@@ -792,6 +784,11 @@ class SupabaseManager:
                             clean_data[key] = json.dumps(value) if value else []
                         else:
                             clean_data[key] = value
+                
+                # Ensure ID is present
+                if 'id' not in clean_data or not clean_data['id']:
+                    clean_data['id'] = str(uuid.uuid4())
+                
                 clean_data_list.append(clean_data)
             
             response = self.client.table(table).insert(clean_data_list).execute()
@@ -814,7 +811,7 @@ class SupabaseManager:
         warnings = []
         
         # Required fields
-        required_fields = ['full_name', 'email', 'roll_number']
+        required_fields = ['full_name', 'email']
         for field in required_fields:
             if not student_data.get(field):
                 errors.append(f"Missing required field: {field}")
@@ -861,3 +858,24 @@ class SupabaseManager:
                 return False
             # If it's another type of error, the table might exist but we can't access it
             return False
+    
+    def get_table_columns_info(self, table_name: str) -> List[Dict]:
+        """Get detailed column information for a table"""
+        try:
+            # Get sample data to infer columns
+            sample = self.select(table_name, limit=1)
+            if sample and len(sample) > 0:
+                columns_info = []
+                for key, value in sample[0].items():
+                    col_info = {
+                        'name': key,
+                        'type': type(value).__name__ if value is not None else 'unknown',
+                        'nullable': True,  # We can't determine this from sample data
+                        'sample_value': value
+                    }
+                    columns_info.append(col_info)
+                return columns_info
+            return []
+        except Exception as e:
+            print(f"Error getting columns info: {e}")
+            return []
