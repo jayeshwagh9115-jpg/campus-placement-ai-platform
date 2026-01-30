@@ -1,5 +1,4 @@
-[file name]: supabase_manager (3).py
-[file content begin]
+
 import streamlit as st
 from supabase import create_client
 import requests
