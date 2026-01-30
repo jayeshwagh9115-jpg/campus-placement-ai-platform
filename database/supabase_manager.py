@@ -1,4 +1,3 @@
-
 import streamlit as st
 from supabase import create_client
 import requests
@@ -804,4 +803,3 @@ class SupabaseManager:
             return "✅ Connected and Active"
         except Exception as e:
             return f"⚠️ Connected but error: {str(e)[:50]}"
-[file content end]
