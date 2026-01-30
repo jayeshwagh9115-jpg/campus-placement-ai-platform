@@ -513,10 +513,6 @@ class StudentFlow:
             if st.button("◀ Previous Step"):
                 self.current_step = 1
                 st.rerun()
-        with col3:
-            if st.button("Next Step ▶"):
-                self.current_step = 3
-                st.rerun()
     
     def step3_nep_course_planning(self):
         """Step 3: NEP Course Planning"""
