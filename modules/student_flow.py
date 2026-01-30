@@ -94,25 +94,20 @@ class StudentFlow:
     def load_from_database(self):
         """Load student data from database"""
         try:
-            if self.db_manager and hasattr(self.db_manager, 'get_user_by_id'):
+            if self.db_manager:
                 # Check if user is logged in
-                if 'user_id' in st.session_state:
-                    user_id = st.session_state['user_id']
-                    user = self.db_manager.get_user_by_id(user_id)
+                if 'user_email' in st.session_state:
+                    email = st.session_state['user_email']
                     
-                    if user:
-                        # Update profile from user table
-                        self.student_data["profile"].update({
-                            "full_name": user.get('full_name', ''),
-                            "email": user.get('email', ''),
-                            "phone": user.get('phone', '')
-                        })
-                        
-                        # Get student data
-                        student = self.db_manager.get_student_by_user_id(user_id)
+                    # Try to get student data
+                    if hasattr(self.db_manager, 'get_student_by_email'):
+                        student = self.db_manager.get_student_by_email(email)
                         if student:
                             self.student_id = student.get('student_id')
                             self.student_data["profile"].update({
+                                "full_name": student.get('full_name', ''),
+                                "email": student.get('email', ''),
+                                "phone": student.get('phone', ''),
                                 "roll_number": student.get('roll_number', ''),
                                 "department": student.get('department', ''),
                                 "semester": str(student.get('semester', '')),
@@ -120,12 +115,13 @@ class StudentFlow:
                                 "backlogs": student.get('backlogs', 0),
                                 "github_profile": student.get('github_profile', ''),
                                 "linkedin_profile": student.get('linkedin_profile', ''),
-                                "portfolio_link": student.get('portfolio_website', '')
+                                "portfolio_link": student.get('portfolio_link', '')
                             })
                             
-                            # Load skills
-                            skills_data = self.db_manager.get_student_skills(self.student_id)
-                            self.student_data["profile"]["skills"] = [skill['skill_name'] for skill in skills_data]
+                            # Load skills if available
+                            if hasattr(self.db_manager, 'get_student_skills'):
+                                skills_data = self.db_manager.get_student_skills(self.student_id)
+                                self.student_data["profile"]["skills"] = [skill['skill_name'] for skill in skills_data]
                             
                             st.success("✅ Loaded data from database")
         except Exception as e:
@@ -133,7 +129,7 @@ class StudentFlow:
             self.load_demo_data()
     
     def save_profile_to_database(self):
-        """Save student profile to database"""
+        """Save student profile to database - SUPABASE COMPATIBLE"""
         try:
             if self.demo_mode or not self.db_manager:
                 st.warning("⚠️ Running in demo mode - Profile saved locally only")
@@ -141,64 +137,195 @@ class StudentFlow:
             
             profile = self.student_data["profile"]
             
-            # Check if user already exists (logged in)
-            if 'user_id' in st.session_state:
-                user_id = st.session_state['user_id']
-                
-                # Update student record
-                student_id = self.create_or_update_student(user_id, profile)
-                if student_id:
-                    self.student_id = student_id
-                    st.session_state['student_id'] = student_id
-                    return {"success": True, "id": student_id, "error": None}
-                else:
-                    return {"success": False, "id": None, "error": "Failed to save student record"}
+            # Check if this is Supabase
+            is_supabase = hasattr(self.db_manager, 'supabase') or 'supabase' in str(type(self.db_manager)).lower()
             
+            if is_supabase:
+                # SUPABASE VERSION
+                return self.save_to_supabase(profile)
             else:
-                # Create new user and student
-                user_id = self.create_user_account(profile)
-                if user_id:
-                    st.session_state['user_id'] = user_id
-                    
-                    # Create student record
-                    student_id = self.create_or_update_student(user_id, profile)
-                    if student_id:
-                        self.student_id = student_id
-                        st.session_state['student_id'] = student_id
-                        st.session_state['student_email'] = profile['email']
-                        return {"success": True, "id": student_id, "error": None}
-                    else:
-                        return {"success": False, "id": None, "error": "Failed to create student record"}
-                else:
-                    return {"success": False, "id": None, "error": "Failed to create user account"}
+                # SQLITE VERSION
+                return self.save_to_sqlite(profile)
                 
         except Exception as e:
             error_msg = f"Error saving to database: {str(e)}"
             st.error(f"❌ {error_msg}")
             return {"success": False, "id": None, "error": error_msg}
     
-    def create_user_account(self, profile):
-        """Create a new user account"""
+    def save_to_supabase(self, profile):
+        """Save profile to Supabase"""
         try:
-            # Generate username from email
-            username = profile['email'].split('@')[0]
+            # Check if student already exists
+            existing_student = None
+            if hasattr(self.db_manager, 'get_student_by_email'):
+                existing_student = self.db_manager.get_student_by_email(profile['email'])
             
-            # Create user (with a default password that should be changed later)
-            user_id = self.db_manager.create_user(
-                username=username,
-                email=profile['email'],
-                password="default123",
-                role="student",
-                full_name=profile['full_name'],
-                phone=profile['phone']
-            )
-            return user_id
+            # Prepare data for Supabase
+            student_data = {
+                "full_name": profile['full_name'],
+                "email": profile['email'],
+                "phone": profile['phone'],
+                "roll_number": profile['roll_number'],
+                "department": profile['department'],
+                "semester": int(profile['semester']) if profile['semester'].isdigit() else 6,
+                "cgpa": float(profile['cgpa']),
+                "backlogs": profile['backlogs'],
+                "github_profile": profile['github_profile'],
+                "linkedin_profile": profile['linkedin_profile'],
+                "portfolio_link": profile['portfolio_link'],
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            if existing_student:
+                # Update existing student
+                student_id = existing_student.get('student_id')
+                if hasattr(self.db_manager, 'update_student'):
+                    result = self.db_manager.update_student(student_id, student_data)
+                elif hasattr(self.db_manager, 'update'):
+                    result = self.db_manager.update('students', student_id, student_data)
+                else:
+                    # Try direct Supabase client
+                    if hasattr(self.db_manager, 'supabase'):
+                        result = self.db_manager.supabase.table('students').update(student_data).eq('student_id', student_id).execute()
+                    else:
+                        result = None
+                
+                if result:
+                    self.student_id = student_id
+                    st.session_state['student_id'] = student_id
+                    st.session_state['student_email'] = profile['email']
+                    
+                    # Save skills
+                    self.save_skills_to_supabase(student_id, profile['skills'])
+                    
+                    return {"success": True, "id": student_id, "error": None}
+            else:
+                # Create new student
+                if hasattr(self.db_manager, 'create_student'):
+                    result = self.db_manager.create_student(student_data)
+                elif hasattr(self.db_manager, 'insert'):
+                    result = self.db_manager.insert('students', student_data)
+                else:
+                    # Try direct Supabase client
+                    if hasattr(self.db_manager, 'supabase'):
+                        result = self.db_manager.supabase.table('students').insert(student_data).execute()
+                    else:
+                        result = None
+                
+                if result and hasattr(result, 'data') and result.data:
+                    self.student_id = result.data[0].get('student_id')
+                    if not self.student_id:
+                        self.student_id = result.data[0].get('id')
+                    
+                    st.session_state['student_id'] = self.student_id
+                    st.session_state['student_email'] = profile['email']
+                    
+                    # Save skills
+                    self.save_skills_to_supabase(self.student_id, profile['skills'])
+                    
+                    return {"success": True, "id": self.student_id, "error": None}
+                elif isinstance(result, dict) and result.get('student_id'):
+                    self.student_id = result['student_id']
+                    st.session_state['student_id'] = self.student_id
+                    st.session_state['student_email'] = profile['email']
+                    
+                    # Save skills
+                    self.save_skills_to_supabase(self.student_id, profile['skills'])
+                    
+                    return {"success": True, "id": self.student_id, "error": None}
+            
+            return {"success": False, "id": None, "error": "Failed to save to Supabase"}
+            
+        except Exception as e:
+            return {"success": False, "id": None, "error": f"Supabase error: {str(e)}"}
+    
+    def save_skills_to_supabase(self, student_id, skills):
+        """Save skills to Supabase"""
+        try:
+            # First, delete existing skills
+            if hasattr(self.db_manager, 'delete_student_skills'):
+                self.db_manager.delete_student_skills(student_id)
+            elif hasattr(self.db_manager, 'supabase'):
+                self.db_manager.supabase.table('student_skills').delete().eq('student_id', student_id).execute()
+            
+            # Add new skills
+            for skill in skills:
+                skill_data = {
+                    "student_id": student_id,
+                    "skill_name": skill,
+                    "skill_level": "Intermediate",
+                    "skill_category": "Technical",
+                    "created_at": datetime.now().isoformat()
+                }
+                
+                if hasattr(self.db_manager, 'add_student_skill'):
+                    self.db_manager.add_student_skill(skill_data)
+                elif hasattr(self.db_manager, 'insert'):
+                    self.db_manager.insert('student_skills', skill_data)
+                elif hasattr(self.db_manager, 'supabase'):
+                    self.db_manager.supabase.table('student_skills').insert(skill_data).execute()
+        except Exception as e:
+            st.warning(f"Could not save skills: {e}")
+    
+    def save_to_sqlite(self, profile):
+        """Save profile to SQLite (your original DatabaseManager)"""
+        # Check if user already exists (logged in)
+        if 'user_id' in st.session_state:
+            user_id = st.session_state['user_id']
+            
+            # Update student record
+            student_id = self.create_or_update_student(user_id, profile)
+            if student_id:
+                self.student_id = student_id
+                st.session_state['student_id'] = student_id
+                return {"success": True, "id": student_id, "error": None}
+            else:
+                return {"success": False, "id": None, "error": "Failed to save student record"}
+        
+        else:
+            # Create new user and student (only for SQLite)
+            user_id = self.create_user_account(profile)
+            if user_id:
+                st.session_state['user_id'] = user_id
+                
+                # Create student record
+                student_id = self.create_or_update_student(user_id, profile)
+                if student_id:
+                    self.student_id = student_id
+                    st.session_state['student_id'] = student_id
+                    st.session_state['student_email'] = profile['email']
+                    return {"success": True, "id": student_id, "error": None}
+                else:
+                    return {"success": False, "id": None, "error": "Failed to create student record"}
+            else:
+                return {"success": False, "id": None, "error": "Failed to create user account"}
+    
+    def create_user_account(self, profile):
+        """Create a new user account - ONLY FOR SQLITE"""
+        try:
+            # Only works with DatabaseManager
+            if hasattr(self.db_manager, 'create_user'):
+                # Generate username from email
+                username = profile['email'].split('@')[0]
+                
+                # Create user
+                user_id = self.db_manager.create_user(
+                    username=username,
+                    email=profile['email'],
+                    password="default123",
+                    role="student",
+                    full_name=profile['full_name'],
+                    phone=profile['phone']
+                )
+                return user_id
+            return None
         except Exception as e:
             st.error(f"Error creating user: {e}")
             return None
     
     def create_or_update_student(self, user_id, profile):
-        """Create or update student record"""
+        """Create or update student record - ONLY FOR SQLITE"""
         try:
             # Check if student already exists
             student = self.db_manager.get_student_by_user_id(user_id)
@@ -250,7 +377,7 @@ class StudentFlow:
             return None
     
     def update_student_skills(self, student_id, skills):
-        """Update student skills in database"""
+        """Update student skills in database - ONLY FOR SQLITE"""
         try:
             # First, remove existing skills
             if hasattr(self.db_manager, 'execute_query'):
@@ -270,49 +397,14 @@ class StudentFlow:
         except Exception as e:
             st.warning(f"Could not update skills: {e}")
     
-    def display(self):
-        """Main display method"""
-        st.header("👨‍🎓 Student Placement Journey")
-        
-        # Display database status
-        if self.db_manager and hasattr(self.db_manager, 'is_connected'):
-            if self.db_manager.is_connected and not self.demo_mode:
-                st.success("✅ Connected to database")
-            else:
-                st.warning("⚠️ Demo mode - data saved locally")
-        
-        # Display current step
-        self.display_progress_bar()
-        
-        # Display step content
-        if self.current_step == 1:
-            self.step1_profile_creation()
-        elif self.current_step == 2:
-            self.step2_ai_resume_building()
-        elif self.current_step == 3:
-            self.step3_nep_course_planning()
-        elif self.current_step == 4:
-            self.step4_internship_match()
-        elif self.current_step == 5:
-            self.step5_career_path_planning()
-        elif self.current_step == 6:
-            self.step6_placement_prediction()
-        elif self.current_step == 7:
-            self.step7_interview_preparation()
-        elif self.current_step == 8:
-            self.step8_placement_tracking()
-        else:
-            st.error("Invalid step number")
-    
     def step1_profile_creation(self):
-        """Step 1: Profile Creation"""
+        """Step 1: Profile Creation - SUPABASE COMPATIBLE"""
         st.subheader("🎯 Profile Creation")
         st.info("Create your student profile to get started with placement preparation")
         
-        # Check if user is logged in
-        is_logged_in = 'user_id' in st.session_state
-        if is_logged_in:
-            st.success(f"👤 Logged in as: {st.session_state.get('username', 'User')}")
+        # Check database type
+        db_type = "Supabase" if hasattr(self.db_manager, 'supabase') or 'supabase' in str(type(self.db_manager)).lower() else "SQLite"
+        st.info(f"Using {db_type} database")
         
         with st.form("student_profile_form"):
             col1, col2 = st.columns(2)
@@ -323,8 +415,7 @@ class StudentFlow:
                                          placeholder="Enter your full name")
                 email = st.text_input("Email*", 
                                      value=self.student_data["profile"]["email"],
-                                     placeholder="student@college.edu",
-                                     disabled=is_logged_in)
+                                     placeholder="student@college.edu")
                 phone = st.text_input("Phone Number", 
                                      value=self.student_data["profile"]["phone"],
                                      placeholder="+91 9876543210")
@@ -436,9 +527,16 @@ class StudentFlow:
                         error_msg = save_result.get('error', 'Unknown error')
                         st.error(f"❌ Failed to save: {error_msg}")
                         
+                        # Show debug info
+                        with st.expander("Debug Info"):
+                            st.write(f"Database type: {db_type}")
+                            st.write(f"DB Manager type: {type(self.db_manager)}")
+                            st.write(f"DB Manager methods: {[m for m in dir(self.db_manager) if not m.startswith('_')][:10]}...")
+                        
                         # Still show summary even if DB save failed
                         self.display_profile_summary()
     
+      
     def step2_ai_resume_building(self):
         """Step 2: AI Resume Building"""
         st.subheader("📝 AI Resume Building")
@@ -1375,3 +1473,53 @@ class StudentFlow:
             
             if profile.get('skills'):
                 st.write(f"**Technical Skills:** {', '.join(profile['skills'])}")
+
+
+     
+    def display(self):
+        """Main display method"""
+        st.header("👨‍🎓 Student Placement Journey")
+        
+        # Display database status
+        if self.db_manager:
+            db_type = "Supabase" if hasattr(self.db_manager, 'supabase') or 'supabase' in str(type(self.db_manager)).lower() else "SQLite"
+            if not self.demo_mode:
+                st.success(f"✅ Connected to {db_type} database")
+            else:
+                st.warning("⚠️ Demo mode - data saved locally")
+        
+        # Display current step
+        self.display_progress_bar()
+        
+        # Display step content
+        if self.current_step == 1:
+            self.step1_profile_creation()
+        elif self.current_step == 2:
+            self.step2_ai_resume_building()
+        elif self.current_step == 3:
+            self.step3_nep_course_planning()
+        elif self.current_step == 4:
+            self.step4_internship_match()
+        elif self.current_step == 5:
+            self.step5_career_path_planning()
+        elif self.current_step == 6:
+            self.step6_placement_prediction()
+        elif self.current_step == 7:
+            self.step7_interview_preparation()
+        elif self.current_step == 8:
+            self.step8_placement_tracking()
+        else:
+            st.error("Invalid step number")
+    
+    # [COPY ALL THE OTHER METHODS FROM THE PREVIOUS COMPLETE VERSION]
+    # step2_ai_resume_building()
+    # step3_nep_course_planning()
+    # step4_internship_match()
+    # step5_career_path_planning()
+    # step6_placement_prediction()
+    # step7_interview_preparation()
+    # step8_placement_tracking()
+    # preview_resume()
+    # display_progress_bar()
+    # display_profile_summary()
+
