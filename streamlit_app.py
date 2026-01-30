@@ -234,7 +234,9 @@ if not MODULES_AVAILABLE:
     st.info("Trying to import modules again...")
     st.rerun()
 
-# Sidebar
+# ============================================
+# SIDEBAR - ONLY PROGRESS INFO, NO NAVIGATION
+# ============================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=100)
     st.title("Platform Navigation")
@@ -278,31 +280,53 @@ with st.sidebar:
     
     st.divider()
     
-    # Show workflow based on selected role
+    # ============================================
+    # ONLY SHOW PROGRESS IN SIDEBAR - NO NAVIGATION
+    # ============================================
+    # Show progress based on selected role
     if st.session_state.selected_role == "👨‍🎓 Student":
-        if st.session_state.workflow_manager:
-            try:
-                st.session_state.workflow_manager.display_student_workflow()
-            except Exception as e:
-                st.error(f"Error displaying student workflow: {e}")
+        current_step = st.session_state.workflows["student"]["current_step"]
+        st.write("### 📊 Student Progress")
+        progress = current_step / 8
+        st.progress(progress)
+        st.write(f"**Step {current_step} of 8**")
+        
+        # Show step names (read-only)
+        steps = [
+            "Profile Creation",
+            "Resume Building", 
+            "Skills Assessment",
+            "Preferences Setup",
+            "Job Matching",
+            "Application",
+            "Interview Prep",
+            "Placement Status"
+        ]
+        for i, step_name in enumerate(steps, 1):
+            if i < current_step:
+                st.write(f"✅ **Step {i}:** {step_name}")
+            elif i == current_step:
+                st.write(f"🎯 **Step {i}:** **{step_name}**")
+            else:
+                st.write(f"○ Step {i}: {step_name}")
+    
     elif st.session_state.selected_role == "🏫 College Admin":
-        if st.session_state.workflow_manager:
-            try:
-                st.session_state.workflow_manager.display_college_workflow()
-            except Exception as e:
-                st.error(f"Error displaying college workflow: {e}")
+        current_step = st.session_state.workflows["college"]["current_step"]
+        st.write("### 📊 College Progress")
+        progress = current_step / 8
+        st.progress(progress)
+        st.write(f"**Step {current_step} of 8**")
+        
     elif st.session_state.selected_role == "💼 Recruiter":
-        if st.session_state.workflow_manager:
-            try:
-                st.session_state.workflow_manager.display_recruiter_workflow()
-            except Exception as e:
-                st.error(f"Error displaying recruiter workflow: {e}")
-    else:
-        if st.session_state.workflow_manager:
-            try:
-                st.session_state.workflow_manager.display_observer_dashboard()
-            except Exception as e:
-                st.error(f"Error displaying observer dashboard: {e}")
+        current_step = st.session_state.workflows["recruiter"]["current_step"]
+        st.write("### 📊 Recruiter Progress")
+        progress = current_step / 8
+        st.progress(progress)
+        st.write(f"**Step {current_step} of 8**")
+    
+    else:  # Observer
+        st.write("### 👀 Observer View")
+        st.info("View platform statistics and activities")
 
 # Main content
 try:
@@ -314,7 +338,7 @@ try:
                 st.session_state.student_flow = StudentFlow()
             except:
                 st.info("Showing basic student interface...")
-                self.display_basic_student_interface()
+                display_basic_student_interface()
                 st.stop()
         
         # Get current step from workflow
@@ -348,9 +372,11 @@ try:
         except Exception as e:
             st.error(f"Error displaying student flow: {e}")
             st.info("Showing fallback interface...")
-            self.display_fallback_student_interface(current_step)
+            display_fallback_student_interface(current_step)
         
-        # Add manual step navigation in main content too
+        # ============================================
+        # NAVIGATION BUTTONS - ONLY IN MAIN CONTENT
+        # ============================================
         st.divider()
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
@@ -369,7 +395,7 @@ try:
     elif st.session_state.selected_role == "🏫 College Admin":
         if not st.session_state.college_flow:
             st.error("College flow module not available")
-            self.display_basic_college_interface()
+            display_basic_college_interface()
             st.stop()
         
         # Get current step from workflow
@@ -402,9 +428,11 @@ try:
             st.session_state.college_flow.display()
         except Exception as e:
             st.error(f"Error displaying college flow: {e}")
-            self.display_fallback_college_interface(current_step)
+            display_fallback_college_interface(current_step)
         
-        # Add manual step navigation in main content too
+        # ============================================
+        # NAVIGATION BUTTONS - ONLY IN MAIN CONTENT
+        # ============================================
         st.divider()
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
@@ -423,7 +451,7 @@ try:
     elif st.session_state.selected_role == "💼 Recruiter":
         if not st.session_state.recruiter_flow:
             st.error("Recruiter flow module not available")
-            self.display_basic_recruiter_interface()
+            display_basic_recruiter_interface()
             st.stop()
         
         # Get current step from workflow
@@ -435,12 +463,14 @@ try:
                 st.session_state.recruiter_flow.display(current_step)
             else:
                 st.error("Recruiter flow doesn't have display method")
-                self.display_fallback_recruiter_interface(current_step)
+                display_fallback_recruiter_interface(current_step)
         except Exception as e:
             st.error(f"Error displaying recruiter flow: {e}")
-            self.display_fallback_recruiter_interface(current_step)
+            display_fallback_recruiter_interface(current_step)
         
-        # Add manual step navigation in main content too
+        # ============================================
+        # NAVIGATION BUTTONS - ONLY IN MAIN CONTENT
+        # ============================================
         st.divider()
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
@@ -460,13 +490,18 @@ try:
         # Display observer view from workflow manager
         if st.session_state.workflow_manager:
             try:
-                st.session_state.workflow_manager.display_observer_view()
+                # NOTE: We're NOT calling display_observer_workflow() which has navigation
+                # Instead, we call display_observer_view() or similar
+                if hasattr(st.session_state.workflow_manager, 'display_observer_view'):
+                    st.session_state.workflow_manager.display_observer_view()
+                else:
+                    display_fallback_observer_view()
             except Exception as e:
                 st.error(f"Error displaying observer view: {e}")
-                self.display_fallback_observer_view()
+                display_fallback_observer_view()
         else:
             # Fallback if workflow manager is not available
-            self.display_fallback_observer_view()
+            display_fallback_observer_view()
 
 except Exception as e:
     st.error(f"❌ Application Error: {str(e)}")
@@ -560,8 +595,8 @@ if not st.session_state.demo_mode and st.session_state.get('db_manager') and not
     The app will run in **Demo Mode** with sample data.
     """)
 
-# Fallback display methods
-def display_basic_student_interface(self):
+# Fallback display methods (moved outside class context)
+def display_basic_student_interface():
     st.header("👨‍🎓 Student Interface (Basic)")
     st.info("The student flow module is not available. Showing basic interface.")
     
@@ -579,12 +614,12 @@ def display_basic_student_interface(self):
         st.write("Build your resume here")
     # Add more steps as needed
 
-def display_fallback_student_interface(self, current_step):
+def display_fallback_student_interface(current_step):
     st.header(f"👨‍🎓 Student - Step {current_step}")
     st.info("This is a fallback interface")
     st.write(f"You are on step {current_step} of 8")
 
-def display_basic_college_interface(self):
+def display_basic_college_interface():
     st.header("🏫 College Admin Interface (Basic)")
     st.info("The college flow module is not available.")
     
@@ -593,11 +628,11 @@ def display_basic_college_interface(self):
     st.write("- Placement statistics")
     st.write("- Company coordination")
 
-def display_fallback_college_interface(self, current_step):
+def display_fallback_college_interface(current_step):
     st.header(f"🏫 College Admin - Step {current_step}")
     st.info("Fallback interface for college admin")
 
-def display_basic_recruiter_interface(self):
+def display_basic_recruiter_interface():
     st.header("💼 Recruiter Interface (Basic)")
     st.info("The recruiter flow module is not available.")
     
@@ -606,11 +641,11 @@ def display_basic_recruiter_interface(self):
     st.write("- Review candidates")
     st.write("- Schedule interviews")
 
-def display_fallback_recruiter_interface(self, current_step):
+def display_fallback_recruiter_interface(current_step):
     st.header(f"💼 Recruiter - Step {current_step}")
     st.info("Fallback interface for recruiter")
 
-def display_fallback_observer_view(self):
+def display_fallback_observer_view():
     st.header("📊 Observer Dashboard")
     st.info("Welcome to the Observer Dashboard. This view provides an overview of all platform activities.")
     
