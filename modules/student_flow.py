@@ -362,49 +362,6 @@ class StudentFlow:
             self.step8_placement_tracking()
         else:
             st.error("Invalid step number")
-        
-        # Add navigation buttons ONLY HERE (not in individual steps)
-        self.display_navigation_buttons()
-    
-    def display_navigation_buttons(self):
-        """Display navigation buttons in ONE place only"""
-        st.divider()
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col1:
-            if st.button("◀ Previous Step", key=f"nav_prev_{self.current_step}"):
-                if self.current_step > 1:
-                    self.current_step -= 1
-                    # Store in session state to persist across reruns
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["student"]["current_step"] = self.current_step
-                    st.rerun()
-        
-        with col2:
-            # Step names for display
-            step_names = {
-                1: "🎯 Profile Creation",
-                2: "📝 AI Resume Building", 
-                3: "📚 NEP Course Planning",
-                4: "💼 PM Internship Match",
-                5: "🎯 Career Path Planning",
-                6: "📊 Placement Prediction",
-                7: "🤝 Interview Preparation",
-                8: "✅ Placement Tracking"
-            }
-            st.write(f"**Step {self.current_step} of {self.total_steps}**")
-            st.caption(step_names.get(self.current_step, ""))
-        
-        with col3:
-            if st.button("Next Step ▶", key=f"nav_next_{self.current_step}"):
-                if self.current_step < self.total_steps:
-                    self.current_step += 1
-                    # Store in session state to persist across reruns
-                    if 'workflows' in st.session_state:
-                        st.session_state.workflows["student"]["current_step"] = self.current_step
-                    st.rerun()
-                else:
-                    st.success("🎉 Congratulations! You've completed all steps!")
     
     def step1_profile_creation(self):
         """Step 1: Profile Creation"""
@@ -486,7 +443,7 @@ class StudentFlow:
                                      value=self.student_data["profile"].get("portfolio_link", ""))
             
             # Submit button
-            submitted = st.form_submit_button("💾 Save Profile")
+            submitted = st.form_submit_button("💾 Save Profile & Continue")
             
             if submitted:
                 # Validate required fields
@@ -521,7 +478,9 @@ class StudentFlow:
                         # Display profile summary
                         self.display_profile_summary()
                         
-                        # Don't auto-advance here, let user use navigation buttons
+                        # Auto-advance to next step
+                        self.current_step = 2
+                        st.rerun()
                     else:
                         error_msg = save_result.get('error', 'Unknown error')
                         st.error(f"❌ Failed to save: {error_msg}")
@@ -596,6 +555,17 @@ class StudentFlow:
         if self.student_data.get("resume"):
             with st.expander("👀 Resume Preview", expanded=True):
                 self.preview_resume()
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step"):
+                self.current_step = 1
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶"):
+                self.current_step = 3
+                st.rerun()
     
     def step3_nep_course_planning(self):
         """Step 3: NEP Course Planning"""
@@ -653,6 +623,17 @@ class StudentFlow:
                 "total_credits": total_credits
             }
             st.success("Course plan saved!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step3_prev"):
+                self.current_step = 2
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step3_next"):
+                self.current_step = 4
+                st.rerun()
     
     def step4_internship_match(self):
         """Step 4: PM Internship Match"""
@@ -728,6 +709,17 @@ class StudentFlow:
                     self.student_data["job_applications"].append(application)
                     st.success(f"Application started for {intern['role']} at {intern['company']}!")
                     st.rerun()
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step4_prev"):
+                self.current_step = 3
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step4_next"):
+                self.current_step = 5
+                st.rerun()
     
     def step5_career_path_planning(self):
         """Step 5: Career Path Planning"""
@@ -810,6 +802,17 @@ class StudentFlow:
                 "set_date": datetime.now().strftime("%Y-%m-%d")
             }
             st.success("Career goals saved!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step5_prev"):
+                self.current_step = 4
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step5_next"):
+                self.current_step = 6
+                st.rerun()
     
     def step6_placement_prediction(self):
         """Step 6: Placement Prediction"""
@@ -936,6 +939,17 @@ class StudentFlow:
                     st.write(f"• {rec}")
             else:
                 st.success("✅ You're on track for excellent placement!")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step6_prev"):
+                self.current_step = 5
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step6_next"):
+                self.current_step = 7
+                st.rerun()
     
     def step7_interview_preparation(self):
         """Step 7: Interview Preparation"""
@@ -1078,6 +1092,17 @@ class StudentFlow:
                 url = description.split(" - ")[0]
                 desc = description.split(" - ")[1]
                 st.write(f"🔗 **[{platform}]({url})**: {desc}")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step7_prev"):
+                self.current_step = 6
+                st.rerun()
+        with col3:
+            if st.button("Next Step ▶", key="step7_next"):
+                self.current_step = 8
+                st.rerun()
     
     def step8_placement_tracking(self):
         """Step 8: Placement Tracking"""
@@ -1234,12 +1259,17 @@ class StudentFlow:
             st.success("Journey reset! You can start again.")
             st.rerun()
         
-        # Special finish button for last step
+        # Finish journey button
         st.divider()
-        if st.button("🎉 Complete Journey", key="complete_journey"):
-            st.balloons()
-            st.success("🎊 Congratulations on completing your placement journey!")
-            st.info("You can now apply for jobs and track your applications.")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button("◀ Previous Step", key="step8_prev"):
+                self.current_step = 7
+                st.rerun()
+        with col3:
+            if st.button("Finish Journey ✅", key="step8_finish"):
+                st.balloons()
+                st.success("🎉 Congratulations on completing your placement journey!")
     
     def preview_resume(self):
         """Preview the resume"""
