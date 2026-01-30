@@ -14,7 +14,7 @@ class StudentFlow:
         self.db_manager = None
         self.demo_mode = True
         self.student_id = None
-        self.user_id = None  # Add user_id for your schema
+        self.user_id = None
         
         # Initialize student data structure
         self.student_data = {
@@ -24,7 +24,7 @@ class StudentFlow:
                 "phone": "",
                 "roll_number": "",
                 "department": "",
-                "semester": "",  # Changed from 'year' to match your schema
+                "semester": "",
                 "cgpa": 0.0,
                 "backlogs": 0,
                 "skills": [],
@@ -68,7 +68,7 @@ class StudentFlow:
                 "phone": "+91 9876543210",
                 "roll_number": "2023CS001",
                 "department": "Computer Science",
-                "semester": "6",  # Changed to match your schema
+                "semester": "6",
                 "cgpa": 8.5,
                 "backlogs": 0,
                 "skills": ["Python", "Java", "SQL", "React", "Machine Learning"],
@@ -133,7 +133,7 @@ class StudentFlow:
             self.load_demo_data()
     
     def save_profile_to_database(self):
-        """Save student profile to database - COMPATIBLE WITH YOUR DB_MANAGER"""
+        """Save student profile to database"""
         try:
             if self.demo_mode or not self.db_manager:
                 st.warning("⚠️ Running in demo mode - Profile saved locally only")
@@ -187,7 +187,7 @@ class StudentFlow:
             user_id = self.db_manager.create_user(
                 username=username,
                 email=profile['email'],
-                password="default123",  # User should change this!
+                password="default123",
                 role="student",
                 full_name=profile['full_name'],
                 phone=profile['phone']
@@ -207,7 +207,6 @@ class StudentFlow:
             semester = int(profile['semester']) if profile['semester'] and profile['semester'].isdigit() else 6
             
             # Convert year to graduation_year
-            # Since your schema doesn't have 'year', we'll estimate graduation year
             current_year = datetime.now().year
             graduation_year = current_year + (6 - semester) if semester <= 6 else current_year
             
@@ -271,8 +270,42 @@ class StudentFlow:
         except Exception as e:
             st.warning(f"Could not update skills: {e}")
     
+    def display(self):
+        """Main display method"""
+        st.header("👨‍🎓 Student Placement Journey")
+        
+        # Display database status
+        if self.db_manager and hasattr(self.db_manager, 'is_connected'):
+            if self.db_manager.is_connected and not self.demo_mode:
+                st.success("✅ Connected to database")
+            else:
+                st.warning("⚠️ Demo mode - data saved locally")
+        
+        # Display current step
+        self.display_progress_bar()
+        
+        # Display step content
+        if self.current_step == 1:
+            self.step1_profile_creation()
+        elif self.current_step == 2:
+            self.step2_ai_resume_building()
+        elif self.current_step == 3:
+            self.step3_nep_course_planning()
+        elif self.current_step == 4:
+            self.step4_internship_match()
+        elif self.current_step == 5:
+            self.step5_career_path_planning()
+        elif self.current_step == 6:
+            self.step6_placement_prediction()
+        elif self.current_step == 7:
+            self.step7_interview_preparation()
+        elif self.current_step == 8:
+            self.step8_placement_tracking()
+        else:
+            st.error("Invalid step number")
+    
     def step1_profile_creation(self):
-        """Step 1: Profile Creation - UPDATED for your database schema"""
+        """Step 1: Profile Creation"""
         st.subheader("🎯 Profile Creation")
         st.info("Create your student profile to get started with placement preparation")
         
@@ -291,7 +324,7 @@ class StudentFlow:
                 email = st.text_input("Email*", 
                                      value=self.student_data["profile"]["email"],
                                      placeholder="student@college.edu",
-                                     disabled=is_logged_in)  # Email can't be changed if logged in
+                                     disabled=is_logged_in)
                 phone = st.text_input("Phone Number", 
                                      value=self.student_data["profile"]["phone"],
                                      placeholder="+91 9876543210")
@@ -311,7 +344,6 @@ class StudentFlow:
                      ["Computer Science", "Electrical Engineering", "Mechanical Engineering",
                       "Civil Engineering", "Information Technology", "Electronics", "Others"] else 0)
                 
-                # Changed from 'year' to 'semester' to match your schema
                 semester = st.selectbox("Semester*",
                     ["1", "2", "3", "4", "5", "6", "7", "8"],
                     index=5 if not self.student_data["profile"]["semester"] else
@@ -340,7 +372,7 @@ class StudentFlow:
             
             skills = st.multiselect("Technical Skills*", skills_options, default=valid_default_skills)
             
-            # Career interests (for local storage only - not in your DB schema)
+            # Career interests
             st.subheader("Career Interests")
             career_interests_options = ["Software Development", "Data Science", "Product Management",
                                        "Research", "Consulting", "Entrepreneurship", "Higher Studies",
@@ -376,7 +408,7 @@ class StudentFlow:
                         "phone": phone,
                         "roll_number": roll_number,
                         "department": department,
-                        "semester": semester,  # Changed from 'year'
+                        "semester": semester,
                         "cgpa": cgpa,
                         "backlogs": backlogs,
                         "skills": skills,
@@ -406,10 +438,6 @@ class StudentFlow:
                         
                         # Still show summary even if DB save failed
                         self.display_profile_summary()
-    
-    # The rest of your methods (step2 to step8) remain mostly the same
-    # Just need to update the display_profile_summary method
-    
     
     def step2_ai_resume_building(self):
         """Step 2: AI Resume Building"""
@@ -1314,7 +1342,6 @@ class StudentFlow:
         progress = self.current_step / self.total_steps
         st.progress(progress)
         
-        # Step names for display
         step_names = {
             1: "🎯 Profile Creation",
             2: "📝 AI Resume Building", 
@@ -1341,7 +1368,7 @@ class StudentFlow:
                 st.write(f"**Department:** {profile.get('department', '')}")
             
             with col2:
-                st.write(f"**Semester:** {profile.get('semester', '')}")  # Changed from 'year'
+                st.write(f"**Semester:** {profile.get('semester', '')}")
                 st.write(f"**CGPA:** {profile.get('cgpa', '')}")
                 st.write(f"**Backlogs:** {profile.get('backlogs', '')}")
                 st.write(f"**Career Interests:** {', '.join(profile.get('career_interests', []))}")
