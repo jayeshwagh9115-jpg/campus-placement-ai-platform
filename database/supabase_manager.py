@@ -1,3 +1,5 @@
+[file name]: supabase_manager (3).py
+[file content begin]
 import streamlit as st
 from supabase import create_client
 import requests
@@ -240,6 +242,94 @@ class SupabaseManager:
             print(f"❌ Delete error in {table}: {e}")
             return False
     
+    # ---------- USER MANAGEMENT METHODS ----------
+    def create_user(self, user_data: Dict) -> Dict:
+        """Create a new user account in the database"""
+        print(f"🔍 DEBUG create_user called with data keys: {list(user_data.keys())}")
+        
+        if not self.is_connected:
+            print("❌ Not connected to database")
+            return {"success": False, "error": "Not connected to database", "id": None}
+        
+        try:
+            # First check if user already exists
+            email = user_data.get('email')
+            if email:
+                existing_user = self.get_user_by_email(email)
+                if existing_user:
+                    print(f"⚠️ User with email '{email}' already exists")
+                    return {
+                        "success": False, 
+                        "error": f"User with email '{email}' already exists", 
+                        "id": existing_user.get('id')
+                    }
+            
+            # Add timestamp
+            if 'created_at' not in user_data:
+                user_data['created_at'] = datetime.now().isoformat()
+            
+            # Check if we're inserting into 'users' or 'students' table
+            # Determine table based on available data
+            if 'role' in user_data and user_data['role'] == 'student':
+                # Save to students table
+                print("💾 Saving as student...")
+                result = self.save_student_profile(user_data)
+                return result
+            else:
+                # Try to insert into 'users' table
+                print("💾 Attempting to insert into users table...")
+                try:
+                    result = self.insert('users', user_data)
+                    if result:
+                        user_id = result.get('id')
+                        print(f"✅ User created successfully: {user_id}")
+                        return {"success": True, "id": user_id, "data": result}
+                except Exception as e:
+                    print(f"⚠️ Failed to insert into users table: {e}")
+                    
+                    # Fallback: Try students table if 'users' table doesn't exist
+                    print("💾 Falling back to students table...")
+                    try:
+                        result = self.save_student_profile(user_data)
+                        return result
+                    except Exception as e2:
+                        print(f"⚠️ Failed to save to students table: {e2}")
+            
+            print("❌ All create user attempts failed")
+            return {"success": False, "error": "Failed to create user account", "id": None}
+        
+        except Exception as e:
+            error_msg = f"Exception in create_user: {e}"
+            print(f"❌ {error_msg}")
+            print(f"❌ Traceback: {traceback.format_exc()}")
+            return {"success": False, "error": error_msg, "id": None}
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email from database"""
+        try:
+            # First try 'users' table
+            try:
+                users = self.select('users', {'email': email}, limit=1)
+                if users:
+                    return users[0]
+            except:
+                pass
+            
+            # If not found, try 'students' table
+            students = self.select('students', {'email': email}, limit=1)
+            if students:
+                return students[0]
+            
+            # Try 'companies' table
+            companies = self.select('companies', {'company_email': email}, limit=1)
+            if companies:
+                return companies[0]
+            
+            return None
+        except Exception as e:
+            print(f"Error getting user by email: {e}")
+            return None
+    
     # ---------- TABLE VALIDATION METHODS ----------
     def get_table_columns(self, table_name: str) -> List[str]:
         """Get column names for a table"""
@@ -297,7 +387,8 @@ class SupabaseManager:
             'colleges': ['college_name', 'college_code'],
             'companies': ['company_name', 'company_email'],
             'job_postings': ['job_title', 'company_id'],
-            'applications': ['student_id', 'job_id']
+            'applications': ['student_id', 'job_id'],
+            'users': ['email', 'full_name']  # Added users table
         }
         return required_fields_map.get(table_name, [])
     
@@ -559,6 +650,15 @@ class SupabaseManager:
         
         return stats
     
+    # ---------- HELPER METHODS ----------
+    def get_companies(self) -> List[Dict]:
+        """Get all companies"""
+        return self.select_all('companies')
+    
+    def get_all_applications(self) -> List[Dict]:
+        """Get all applications"""
+        return self.select_all('applications')
+    
     # ---------- TEST & DEBUG METHODS ----------
     def test_connection(self) -> Dict:
         """Test all connections and return status"""
@@ -573,7 +673,7 @@ class SupabaseManager:
             return status
         
         # Test each table
-        tables = ['students', 'companies', 'job_postings', 'applications', 'colleges']
+        tables = ['students', 'companies', 'job_postings', 'applications', 'colleges', 'users']
         
         for table in tables:
             try:
@@ -705,3 +805,4 @@ class SupabaseManager:
             return "✅ Connected and Active"
         except Exception as e:
             return f"⚠️ Connected but error: {str(e)[:50]}"
+[file content end]
