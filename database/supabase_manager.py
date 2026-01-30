@@ -12,6 +12,7 @@ class SupabaseManager:
         self.is_connected = False
         self.url = None
         self.key = None
+        self.connection_error = None
         
         # Your credentials
         self.url = "https://ptnozudvgcqhnmidjoqj.supabase.co"
@@ -20,12 +21,14 @@ class SupabaseManager:
         print(f"🔗 Connecting to: {self.url}")
         
         if not self.url or not self.key:
-            print("❌ Missing Supabase credentials")
+            self.connection_error = "Missing Supabase credentials"
+            print(f"❌ {self.connection_error}")
             return
         
         try:
             # Create client
             self.client = create_client(self.url, self.key)
+            self.connection_error = None
             
             # Test connection with a simple query
             try:
@@ -33,20 +36,25 @@ class SupabaseManager:
                 print(f"✅ Connected! Found {len(response.data) if response.data else 0} students")
                 self.is_connected = True
             except Exception as e:
+                self.connection_error = str(e)
                 print(f"⚠️ Connection test failed: {e}")
                 print("🔧 Creating tables if they don't exist...")
                 
                 # Try to create tables automatically
                 if self._create_tables_if_not_exist():
                     self.is_connected = True
+                    self.connection_error = None
                 else:
                     # Try direct API as fallback
                     if self._test_direct_api():
                         self.is_connected = True
+                        self.connection_error = None
                     else:
                         self.is_connected = False
+                        self.connection_error = "All connection attempts failed"
                 
         except Exception as e:
+            self.connection_error = str(e)
             print(f"❌ Failed to create Supabase client: {e}")
             self.is_connected = False
     
@@ -54,7 +62,7 @@ class SupabaseManager:
         """Create tables if they don't exist"""
         try:
             # List of tables to check/create
-            tables = ['students', 'colleges', 'companies', 'job_postings', 'applications']
+            tables = ['students', 'colleges', 'companies', 'job_postings', 'applications', 'users']
             created_count = 0
             
             for table in tables:
@@ -63,7 +71,8 @@ class SupabaseManager:
                     response = self.client.table(table).select('id').limit(1).execute()
                     print(f"✅ Table '{table}' exists")
                 except Exception as e:
-                    if "not found" in str(e).lower() or "does not exist" in str(e).lower():
+                    error_str = str(e).lower()
+                    if "not found" in error_str or "does not exist" in error_str or "relation" in error_str:
                         print(f"⚠️ Table '{table}' doesn't exist. Creating...")
                         # In Supabase, you typically create tables via SQL in the dashboard
                         # For now, just note which tables are missing
@@ -88,7 +97,8 @@ class SupabaseManager:
             
             response = requests.get(
                 f"{self.url}/rest/v1/",
-                headers=headers
+                headers=headers,
+                timeout=10
             )
             
             if response.status_code in [200, 201, 204]:
@@ -246,8 +256,9 @@ class SupabaseManager:
         print(f"🔍 DEBUG create_user called with data keys: {list(user_data.keys())}")
         
         if not self.is_connected:
-            print("❌ Not connected to database")
-            return {"success": False, "error": "Not connected to database", "id": None}
+            error_msg = self.connection_error or "Not connected to database"
+            print(f"❌ {error_msg}")
+            return {"success": False, "error": error_msg, "id": None}
         
         try:
             # First check if user already exists
@@ -255,20 +266,26 @@ class SupabaseManager:
             if email:
                 existing_user = self.get_user_by_email(email)
                 if existing_user:
-                    print(f"⚠️ User with email '{email}' already exists")
+                    user_id = existing_user.get('id')
+                    print(f"⚠️ User with email '{email}' already exists (ID: {user_id})")
                     return {
-                        "success": False, 
+                        "success": True,  # Consider this success since user exists
                         "error": f"User with email '{email}' already exists", 
-                        "id": existing_user.get('id')
+                        "id": user_id,
+                        "data": existing_user
                     }
             
             # Add timestamp
             if 'created_at' not in user_data:
                 user_data['created_at'] = datetime.now().isoformat()
             
+            # Add default role if not specified
+            if 'role' not in user_data:
+                user_data['role'] = 'student'
+            
             # Check if we're inserting into 'users' or 'students' table
             # Determine table based on available data
-            if 'role' in user_data and user_data['role'] == 'student':
+            if user_data['role'] == 'student':
                 # Save to students table
                 print("💾 Saving as student...")
                 result = self.save_student_profile(user_data)
@@ -277,25 +294,37 @@ class SupabaseManager:
                 # Try to insert into 'users' table
                 print("💾 Attempting to insert into users table...")
                 try:
+                    # Check if users table exists first
+                    try:
+                        test_result = self.client.table('users').select('id').limit(1).execute()
+                        print("✅ Users table exists")
+                    except Exception as table_check_error:
+                        print(f"⚠️ Users table check failed: {table_check_error}")
+                        # Create users table structure if needed
+                        print("🔧 Falling back to students table for user storage...")
+                        return self.save_student_profile(user_data)
+                    
+                    # Insert into users table
                     result = self.insert('users', user_data)
                     if result:
                         user_id = result.get('id')
-                        print(f"✅ User created successfully: {user_id}")
+                        print(f"✅ User created successfully in users table: {user_id}")
                         return {"success": True, "id": user_id, "data": result}
+                    else:
+                        print("⚠️ Insert returned no result, trying students table...")
+                        return self.save_student_profile(user_data)
                 except Exception as e:
                     print(f"⚠️ Failed to insert into users table: {e}")
                     
-                    # Fallback: Try students table if 'users' table doesn't exist
+                    # Fallback: Try students table
                     print("💾 Falling back to students table...")
                     try:
                         result = self.save_student_profile(user_data)
                         return result
                     except Exception as e2:
                         print(f"⚠️ Failed to save to students table: {e2}")
+                        return {"success": False, "error": f"Failed to save user: {e2}", "id": None}
             
-            print("❌ All create user attempts failed")
-            return {"success": False, "error": "Failed to create user account", "id": None}
-        
         except Exception as e:
             error_msg = f"Exception in create_user: {e}"
             print(f"❌ {error_msg}")
@@ -310,18 +339,24 @@ class SupabaseManager:
                 users = self.select('users', {'email': email}, limit=1)
                 if users:
                     return users[0]
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Error querying users table: {e}")
             
             # If not found, try 'students' table
-            students = self.select('students', {'email': email}, limit=1)
-            if students:
-                return students[0]
+            try:
+                students = self.select('students', {'email': email}, limit=1)
+                if students:
+                    return students[0]
+            except Exception as e:
+                print(f"⚠️ Error querying students table: {e}")
             
             # Try 'companies' table
-            companies = self.select('companies', {'company_email': email}, limit=1)
-            if companies:
-                return companies[0]
+            try:
+                companies = self.select('companies', {'company_email': email}, limit=1)
+                if companies:
+                    return companies[0]
+            except Exception as e:
+                print(f"⚠️ Error querying companies table: {e}")
             
             return None
         except Exception as e:
@@ -386,7 +421,7 @@ class SupabaseManager:
             'companies': ['company_name', 'company_email'],
             'job_postings': ['job_title', 'company_id'],
             'applications': ['student_id', 'job_id'],
-            'users': ['email', 'full_name']  # Added users table
+            'users': ['email', 'full_name']
         }
         return required_fields_map.get(table_name, [])
     
@@ -396,8 +431,9 @@ class SupabaseManager:
         print(f"🔍 DEBUG save_student_profile called with data keys: {list(student_data.keys())}")
     
         if not self.is_connected:
-            print("❌ Not connected to database")
-            return {"success": False, "error": "Not connected to database", "id": None}
+            error_msg = self.connection_error or "Not connected to database"
+            print(f"❌ {error_msg}")
+            return {"success": False, "error": error_msg, "id": None}
     
         try:
             # Validate against table structure first
@@ -409,9 +445,9 @@ class SupabaseManager:
             # Ensure required fields
             required_fields = ['full_name', 'email', 'roll_number']
             for field in required_fields:
-                if field not in student_data:
-                    print(f"❌ Missing required field: {field}")
-                    return {"success": False, "error": f"Missing required field: {field}", "id": None}
+                if field not in student_data or not student_data[field]:
+                    print(f"❌ Missing or empty required field: {field}")
+                    return {"success": False, "error": f"Missing or empty required field: {field}", "id": None}
             
             # Add timestamp if not present
             if 'created_at' not in student_data:
@@ -425,6 +461,8 @@ class SupabaseManager:
                     student_id = result.get('id')
                     print(f"✅ Upsert successful: {student_id}")
                     return {"success": True, "id": student_id, "data": result}
+                else:
+                    print("⚠️ Upsert returned no result")
             except Exception as e1:
                 print(f"⚠️ Upsert failed: {e1}")
             
@@ -436,6 +474,8 @@ class SupabaseManager:
                     student_id = result.get('id')
                     print(f"✅ Insert successful: {student_id}")
                     return {"success": True, "id": student_id, "data": result}
+                else:
+                    print("⚠️ Insert returned no result")
             except Exception as e2:
                 print(f"⚠️ Insert failed: {e2}")
             
@@ -452,7 +492,8 @@ class SupabaseManager:
                 response = requests.post(
                     f"{self.url}/rest/v1/students",
                     json=student_data,
-                    headers=headers
+                    headers=headers,
+                    timeout=10
                 )
                 
                 if response.status_code in [200, 201]:
@@ -461,6 +502,8 @@ class SupabaseManager:
                         student_id = result[0].get('id')
                         print(f"✅ Direct API successful: {student_id}")
                         return {"success": True, "id": student_id, "data": result[0]}
+                    else:
+                        print("⚠️ Direct API returned empty result")
                 else:
                     print(f"❌ Direct API failed: {response.status_code} - {response.text[:200]}")
                     
@@ -615,7 +658,8 @@ class SupabaseManager:
             'total_students': 0,
             'active_jobs': 0,
             'total_companies': 0,
-            'total_applications': 0
+            'total_applications': 0,
+            'connection_status': self.get_database_status()
         }
         
         if not self.is_connected:
@@ -625,23 +669,23 @@ class SupabaseManager:
             # Get counts with error handling for each
             try:
                 stats['total_students'] = self.get_student_count()
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Error getting student count: {e}")
             
             try:
                 stats['total_companies'] = len(self.get_companies())
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Error getting companies: {e}")
             
             try:
                 stats['active_jobs'] = len(self.select('job_postings', {'status': 'open'}))
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Error getting active jobs: {e}")
             
             try:
                 stats['total_applications'] = len(self.get_all_applications())
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Error getting applications: {e}")
                 
         except Exception as e:
             print(f"Error getting stats: {e}")
@@ -662,6 +706,7 @@ class SupabaseManager:
         """Test all connections and return status"""
         status = {
             'connected': self.is_connected,
+            'connection_error': self.connection_error,
             'tables': {},
             'sample_data': {},
             'table_columns': {}
@@ -705,7 +750,8 @@ class SupabaseManager:
             'exists': False,
             'columns': [],
             'row_count': 0,
-            'sample_row': None
+            'sample_row': None,
+            'error': None
         }
         
         try:
@@ -732,7 +778,7 @@ class SupabaseManager:
         }
         
         if not self.is_connected:
-            result['errors'].append("Not connected to database")
+            result['errors'].append(self.connection_error or "Not connected to database")
             return result
         
         try:
@@ -795,11 +841,23 @@ class SupabaseManager:
     def get_database_status(self) -> str:
         """Get database connection status as a string"""
         if not self.is_connected:
-            return "❌ Not Connected"
+            return f"❌ Not Connected: {self.connection_error}"
         
         try:
             # Try a simple query
-            self.client.table('students').select('count', count='exact').execute()
+            response = self.client.table('students').select('id', count='exact').limit(1).execute()
             return "✅ Connected and Active"
         except Exception as e:
-            return f"⚠️ Connected but error: {str(e)[:50]}"
+            return f"⚠️ Connected but error: {str(e)[:100]}"
+    
+    def check_table_exists(self, table_name: str) -> bool:
+        """Check if a table exists in the database"""
+        try:
+            result = self.select(table_name, limit=1)
+            return True
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "does not exist" in error_str or "relation" in error_str:
+                return False
+            # If it's another type of error, the table might exist but we can't access it
+            return False
